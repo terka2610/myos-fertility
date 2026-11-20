@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MyOS route monitor</title>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
+    crossorigin="anonymous"
+  />
+  <style>
+    :root {
+      --bg: #101614;
+      --panel: #18211d;
+      --line: #2a3a33;
+      --text: #e7f2eb;
+      --muted: #93a89c;
+      --live: #7dcea0;
+      --held: #e0b15a;
+      --wait: #7f9188;
+      --phone: #8eb7ff;
+      --bag: #f0b429;
+      --vehicle: #3ecfb8;
+      --asset: #d0ddd6;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-end;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .mark {
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--live);
+      margin: 0 0 4px;
+    }
+    h1 { font-size: 22px; font-weight: 600; margin: 0; }
+    .sub { margin: 4px 0 0; color: var(--muted); font-size: 13px; max-width: 640px; }
+    .status-wrap { text-align: right; font-variant-numeric: tabular-nums; }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--wait);
+      margin-right: 6px;
+    }
+    .status-dot.ok { background: var(--live); }
+    .status-dot.bad { background: #e07a68; }
+    .count { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    main {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+    }
+    aside {
+      min-height: 0;
+      border-right: 1px solid var(--line);
+      overflow: auto;
+      padding: 12px;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    button {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--live); }
+    a { color: var(--live); }
+    .lang-switch {
+      display: flex;
+      overflow: hidden;
+      border-radius: 999px;
+      border: 1px solid #c5d0c8;
+      background: #fff;
+    }
+    .lang-switch button {
+      border: 0;
+      border-radius: 0;
+      color: #1c2822;
+      background: transparent;
+    }
+    .lang-switch button.active {
+      background: #1c2822;
+      color: #f4fff8;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .card-top, .meta, .telemetry { display: flex; justify-content: space-between; gap: 8px; }
+    .card-top { align-items: baseline; }
+    .label { font-weight: 600; }
+    .pill {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--wait);
+    }
+    .pill.live { color: var(--live); }
+    .pill.held { color: var(--held); }
+    .kind {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .meta, .telemetry, .note {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .coords {
+      font-family: "SF Mono", ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      color: var(--text);
+    }
+    .swatch {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .note.warn { color: var(--held); }
+    #map { height: 100%; min-height: 0; background: #d7e2d8; }
+    .leaflet-container { height: 100%; width: 100%; background: #d7e2d8; font: inherit; }
+    .asset-marker { background: transparent; border: 0; }
+    .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #f4fff8;
+      box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.25);
+    }
+    @media (max-width: 800px) {
+      body { height: auto; overflow: auto; }
+      main { grid-template-columns: 1fr; grid-template-rows: 48vh auto; }
+      #map { order: -1; height: 48vh; min-height: 280px; }
+      aside { border-right: 0; border-top: 1px solid var(--line); }
+      header { flex-direction: column; align-items: flex-start; }
+      .status-wrap { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <p class="mark">MyOS specimen logistics</p>
+      <h1>Route monitor</h1>
+      <p class="sub">Courier, shipper, and phone. <a href="/track">Share this phone’s location</a></p>
+    </div>
+    <div class="status-wrap">
+      <div><span id="status-dot" class="status-dot"></span><span id="status-text">Connecting</span></div>
+      <div class="count" id="count"></div>
+    </div>
+  </header>
+  <main>
+    <aside>
+      <div class="toolbar">
+        <span>Tracked assets</span>
+        <button id="fit" type="button">Fit route</button>
+      </div>
+      <div id="cards"></div>
+    </aside>
+    <div id="map"></div>
+  </main>
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"
+    crossorigin="anonymous"
+  ></script>
+  <script>
+    const colors = { phone: "#8eb7ff", bag: "#f0b429", vehicle: "#3ecfb8", asset: "#d0ddd6" };
+    const sourceNames = { browser: "Phone browser", owntracks: "OwnTracks", osmand: "Traccar OsmAnd", "traccar-client": "Traccar Client" };
+    const cards = document.getElementById("cards");
+    const statusDot = document.getElementById("status-dot");
+    const statusText = document.getElementById("status-text");
+    const count = document.getElementById("count");
+    const mapEl = document.getElementById("map");
+    let map = null;
+    let layer = null;
+    let fitted = false;
+
+    const tileSets = {
+      en: {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+        attribution: "Tiles &copy; Esri"
+      },
+      local: {
+        url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attribution: "&copy; OpenStreetMap"
+      }
+    };
+    let baseLayer = null;
+
+    function setMapLanguage(lang) {
+      if (!map || !tileSets[lang]) return;
+      const spec = tileSets[lang];
+      if (baseLayer) map.removeLayer(baseLayer);
+      baseLayer = L.tileLayer(spec.url, { maxZoom: 19, attribution: spec.attribution }).addTo(map);
+      baseLayer.bringToBack();
+      try { localStorage.setItem("myos-map-lang", lang); } catch (error) { /* private mode */ }
+      document.querySelectorAll(".lang-switch button").forEach((button) => {
+        button.classList.toggle("active", button.dataset.lang === lang);
+      });
+    }
+
+    if (window.L) {
+      map = L.map(mapEl, { zoomControl: true }).setView([25.19, 55.26], 11);
+      const LangControl = L.Control.extend({
+        options: { position: "topright" },
+        onAdd: function () {
+          const wrap = L.DomUtil.create("div", "lang-switch");
+          wrap.innerHTML = '<button type="button" data-lang="en">English</button><button type="button" data-lang="local">العربية</button>';
+          L.DomEvent.disableClickPropagation(wrap);
+          wrap.addEventListener("click", (event) => {
+            const button = event.target.closest("button");
+            if (button) setMapLanguage(button.dataset.lang);
+          });
+          return wrap;
+        }
+      });
+      map.addControl(new LangControl());
+      let savedLang = "en";
+      try { savedLang = localStorage.getItem("myos-map-lang") || "en"; } catch (error) { savedLang = "en"; }
+      setMapLanguage(savedLang === "local" ? "local" : "en");
+      layer = L.layerGroup().addTo(map);
+    } else {
+      mapEl.textContent = "Map library did not load. Fixes are still stored in the local database.";
+    }
+
+    function ageLabel(iso) {
+      if (!iso) return "No fix yet";
+      const then = Date.parse(iso.endsWith("Z") ? iso : iso + "Z");
+      const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+      if (seconds < 15) return "just now";
+      if (seconds < 60) return seconds + "s ago";
+      const minutes = Math.round(seconds / 60);
+      if (minutes < 60) return minutes + "m ago";
+      const hours = Math.round(minutes / 60);
+      return hours + "h ago";
+    }
+
+    function freshness(iso) {
+      if (!iso) return "wait";
+      const then = Date.parse(iso.endsWith("Z") ? iso : iso + "Z");
+      return (Date.now() - then) < 5 * 60 * 1000 ? "live" : "held";
+    }
+
+    function kilometers(trail) {
+      if (!trail || trail.length < 2) return 0;
+      let total = 0;
+      for (let i = 1; i < trail.length; i += 1) total += haversine(trail[i - 1], trail[i]);
+      return total;
+    }
+
+    function haversine(a, b) {
+      const R = 6371;
+      const dLat = (b[0] - a[0]) * Math.PI / 180;
+      const dLon = (b[1] - a[1]) * Math.PI / 180;
+      const lat1 = a[0] * Math.PI / 180;
+      const lat2 = b[0] * Math.PI / 180;
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+    }
+
+    function addText(parent, tag, text, className) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      node.textContent = text;
+      parent.appendChild(node);
+      return node;
+    }
+
+    function renderCards(assets) {
+      cards.replaceChildren();
+      assets.forEach((asset) => {
+        const last = asset.last;
+        const state = freshness(last && last.recorded_at);
+        const card = document.createElement("article");
+        card.className = "card";
+        const top = document.createElement("div");
+        top.className = "card-top";
+        const title = document.createElement("div");
+        const swatch = document.createElement("span");
+        swatch.className = "swatch";
+        swatch.style.background = colors[asset.kind] || colors.asset;
+        title.appendChild(swatch);
+        title.appendChild(document.createTextNode(asset.label));
+        top.appendChild(title);
+        const pillText = state === "live" ? "Live" : state === "held" ? "Held" : "Waiting";
+        addText(top, "span", pillText, "pill " + state);
+        card.appendChild(top);
+        addText(card, "div", asset.kind + " · " + asset.asset_id, "kind");
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        addText(meta, "span", last ? last.lat.toFixed(5) + ", " + last.lon.toFixed(5) : "—", "coords");
+        addText(meta, "span", ageLabel(last && last.recorded_at));
+        card.appendChild(meta);
+        const speed = last && last.speed_kmh != null ? Math.round(last.speed_kmh) + " km/h" : "— km/h";
+        const battery = last && last.battery_pct != null ? Math.round(last.battery_pct) + "%" : "—%";
+        const distance = kilometers(asset.trail);
+        const distanceText = distance > 0 ? distance.toFixed(1) + " km trail" : "no trail";
+        const source = last ? (sourceNames[last.source] || last.source) : "no report";
+        addText(card, "div", speed + " · " + battery + " · " + distanceText, "telemetry");
+        addText(card, "div", source, "note");
+        cards.appendChild(card);
+      });
+    }
+
+    function renderMap(assets) {
+      if (!map || !layer) return;
+      layer.clearLayers();
+      const bounds = [];
+      assets.forEach((asset) => {
+        if (!asset.trail || !asset.trail.length || !asset.last) return;
+        const color = colors[asset.kind] || colors.asset;
+        const line = asset.trail.map((point) => [point[0], point[1]]);
+        L.polyline(line, { color: color, weight: 4, opacity: 0.9 }).addTo(layer);
+        line.forEach((point) => bounds.push(point));
+        const icon = L.divIcon({
+          className: "asset-marker",
+          html: '<div class="dot" style="background:' + color + '"></div>',
+          iconSize: [14, 14],
+          iconAnchor: [7, 7]
+        });
+        L.marker([asset.last.lat, asset.last.lon], { icon: icon, title: asset.label }).addTo(layer);
+      });
+      map.invalidateSize();
+      const size = map.getSize();
+      if (!fitted && bounds.length && size.x > 100 && size.y > 100) {
+        map.fitBounds(bounds, { padding: [40, 40] });
+        fitted = true;
+      }
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch("/api/latest", { cache: "no-store" });
+        if (!response.ok) throw new Error("bad status");
+        const data = await response.json();
+        statusDot.className = "status-dot ok";
+        statusText.textContent = "Receiving";
+        count.textContent = data.position_count + " fixes stored locally";
+        renderCards(data.assets);
+        renderMap(data.assets);
+      } catch (error) {
+        statusDot.className = "status-dot bad";
+        statusText.textContent = "Monitor offline";
+      }
+    }
+
+    document.getElementById("fit").addEventListener("click", () => {
+      fitted = false;
+      refresh();
+    });
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</body>
+</html>
