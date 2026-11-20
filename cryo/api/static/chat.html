@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SMP-0001 simulated chat</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: #eef3f0; color: #17211c; }
+  header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: 0.9rem 1.1rem; background: #12352c; color: #f4faf7; }
+  header p { margin: 0.15rem 0 0; color: #c9ddd4; font-size: 0.92rem; }
+  header button, .record button, form button { border: 0; border-radius: 999px; padding: 0.45rem 0.8rem; background: #0b6b4f; color: white; font: inherit; cursor: pointer; }
+  header button { background: #e7f3ed; color: #12352c; }
+  main { display: grid; grid-template-columns: 20rem 1fr; min-height: calc(100vh - 4.6rem); }
+  .record, .chat { padding: 1rem; }
+  .record { background: #f7faf8; border-right: 1px solid #d5e2db; }
+  .record h2, .chat h2 { margin: 0 0 0.35rem; font-size: 1rem; }
+  .card { background: white; border: 1px solid #d5e2db; border-radius: 12px; padding: 0.75rem 0.85rem; margin: 0 0 0.7rem; }
+  .card p { margin: 0.2rem 0; }
+  .muted { color: #5d6f67; }
+  .stale { color: #8a4b12; font-weight: 650; }
+  pre { white-space: pre-wrap; word-break: break-word; background: #10241e; color: #e7f6ef; border-radius: 8px; padding: 0.6rem; font-size: 0.78rem; }
+  .actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .tabs { display: flex; gap: 0.4rem; margin-bottom: 0.7rem; }
+  .tabs button { border: 1px solid #c9dbd3; background: white; border-radius: 999px; padding: 0.4rem 0.7rem; font: inherit; cursor: pointer; }
+  .tabs button.on { background: #12352c; color: white; border-color: #12352c; }
+  .thread { background: white; border: 1px solid #d5e2db; border-radius: 14px; min-height: 24rem; padding: 0.8rem; display: flex; flex-direction: column; gap: 0.45rem; }
+  .bubble { max-width: 36rem; padding: 0.55rem 0.7rem; border-radius: 12px; }
+  .out { background: #e7f3ed; }
+  .in { background: #fff7e8; align-self: flex-end; }
+  form { display: flex; gap: 0.45rem; margin-top: 0.7rem; }
+  input { flex: 1; border: 1px solid #c9dbd3; border-radius: 999px; padding: 0.55rem 0.8rem; font: inherit; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } .record { border-right: 0; border-bottom: 1px solid #d5e2db; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <strong>SMP-0001 simulated chat</strong>
+    <p>Four separate conversations. WhatsApp is not connected.</p>
+  </div>
+  <button id="reset" type="button">Reset demo</button>
+</header>
+<main>
+  <section class="record">
+    <div class="card">
+      <h2>Record</h2>
+      <p id="doc"></p>
+      <p id="schedule"></p>
+      <p id="hint" class="muted"></p>
+    </div>
+    <div class="card">
+      <h2>Location</h2>
+      <p id="gps"></p>
+      <pre id="payload">No tracking point yet.</pre>
+    </div>
+    <div class="actions" id="actions"></div>
+  </section>
+  <section class="chat">
+    <div class="tabs" id="tabs"></div>
+    <div class="thread" id="thread"></div>
+    <form id="composer">
+      <input id="text" autocomplete="off" placeholder="Reply as this party">
+      <button type="submit">Send</button>
+    </form>
+  </section>
+</main>
+<script>
+const labels = { centre: "Fertility centre", transport: "Transport", storage: "Storage", patient: "Patient" };
+const actionLabels = {
+  upload: "Upload document",
+  approve: "Approve document",
+  record_pickup: "Record pickup",
+  gps_next: "Advance route",
+  gps_stop: "Mark tracking stopped",
+  record_receipt: "Record receipt",
+  record_placement: "Record placement"
+};
+let state = null;
+let role = "centre";
+
+function esc(value) {
+  return String(value).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+}
+
+async function load() {
+  const response = await fetch("/api/chat");
+  state = await response.json();
+  draw();
+}
+
+function draw() {
+  document.getElementById("doc").textContent = "Document: " + state.document.status.replaceAll("_", " ");
+  const eta = state.schedule.eta_stale ? state.schedule.eta + " (stale)" : state.schedule.eta;
+  document.getElementById("schedule").textContent = state.schedule.status + " · estimate " + eta;
+  document.getElementById("hint").textContent = state.hint;
+  const gps = document.getElementById("gps");
+  gps.textContent = state.tracking
+    ? "Replay point " + state.gps_index + " of " + state.gps_total
+    : "No point yet";
+  gps.className = state.schedule.eta_stale ? "stale" : "";
+  document.getElementById("payload").textContent = state.tracking
+    ? JSON.stringify(state.tracking, null, 2)
+    : "No tracking point yet.";
+  document.getElementById("actions").innerHTML = state.actions.map((action) =>
+    '<button type="button" data-action="' + action + '">' + actionLabels[action] + "</button>"
+  ).join("");
+  document.getElementById("tabs").innerHTML = Object.keys(labels).map((key) =>
+    '<button type="button" data-role="' + key + '" class="' + (key === role ? "on" : "") + '">' + labels[key] + "</button>"
+  ).join("");
+  const thread = state.conversations[role];
+  document.getElementById("thread").innerHTML = thread.length
+    ? thread.map((item) => '<div class="bubble ' + item.direction + '">' + esc(item.body) + "</div>").join("")
+    : '<p class="muted">No messages in this conversation.</p>';
+}
+
+document.getElementById("tabs").addEventListener("click", (event) => {
+  const next = event.target.dataset.role;
+  if (!next) return;
+  role = next;
+  draw();
+});
+
+document.getElementById("actions").addEventListener("click", async (event) => {
+  const action = event.target.dataset.action;
+  if (!action) return;
+  await fetch("/api/chat/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+  await load();
+});
+
+document.getElementById("composer").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = document.getElementById("text");
+  const text = input.value.trim();
+  if (!text) return;
+  const open = state.open_for[role];
+  await fetch("/api/chat/message", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role, text, proposal_id: open ? open.id : null })
+  });
+  input.value = "";
+  await load();
+});
+
+document.getElementById("reset").addEventListener("click", async () => {
+  await fetch("/api/chat/reset", { method: "POST" });
+  role = "centre";
+  await load();
+});
+
+load();
+</script>
+</body>
+</html>
