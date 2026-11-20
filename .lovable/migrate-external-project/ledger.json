@@ -1,0 +1,107 @@
+[
+  {
+    "capability": "code: fertility app (consultation, doctor, dashboard, history, resources, settings)",
+    "source": "Next.js + FastAPI",
+    "outcome": "migrate",
+    "status": "verified",
+    "next_action": "done; avatar uses still image + voice until LiveAvatar key added"
+  },
+  {
+    "capability": "code: care platform (clinics, programs, staff, community, handoffs, memory)",
+    "source": "Next.js + FastAPI",
+    "outcome": "migrate",
+    "status": "pending",
+    "next_action": "rebuild"
+  },
+  {
+    "capability": "code: publisher/subscriber/admin teaching & avatar marketplace",
+    "source": "Next.js + FastAPI",
+    "outcome": "migrate",
+    "status": "pending",
+    "next_action": "rebuild after fertility+care"
+  },
+  {
+    "capability": "schema: 75 tables incl. pgvector knowledge chunks",
+    "source": "SQLAlchemy/Alembic Postgres",
+    "outcome": "migrate",
+    "status": "partial",
+    "next_action": "fertility tables done; care/marketplace tables pending"
+  },
+  {
+    "capability": "records",
+    "source": "Postgres",
+    "outcome": "migrate",
+    "status": "pending",
+    "next_action": "request CSV/JSON exports after preview"
+  },
+  {
+    "capability": "auth identities",
+    "source": "custom FastAPI JWT auth",
+    "outcome": "migrate",
+    "status": "partial",
+    "next_action": "Lovable auth + legacy email linking built; needs users export + verification"
+  },
+  {
+    "capability": "authorization: roles admin/publisher/subscriber, care roles patient/partner/staff",
+    "source": "FastAPI deps",
+    "outcome": "migrate",
+    "status": "pending",
+    "next_action": "user_roles table + RLS"
+  },
+  {
+    "capability": "uploaded files / private videos",
+    "source": "local private_storage + uploads",
+    "outcome": "migrate",
+    "status": "pending",
+    "next_action": "Cloud storage buckets"
+  },
+  {
+    "capability": "AI: OpenAI chat/RAG/realtime",
+    "source": "OpenAI",
+    "outcome": "preserve",
+    "status": "migrated",
+    "next_action": "fertility chat runs on Lovable AI; ProfSidekick realtime pending"
+  },
+  {
+    "capability": "TTS: ElevenLabs",
+    "source": "ElevenLabs",
+    "outcome": "preserve",
+    "status": "implemented",
+    "next_action": "needs ELEVENLABS_API_KEY; browser voice fallback active"
+  },
+  {
+    "capability": "video avatar: HeyGen LiveAvatar",
+    "source": "HeyGen",
+    "outcome": "preserve",
+    "status": "pending",
+    "next_action": "LIVEAVATAR_API_KEY at verification"
+  },
+  {
+    "capability": "billing/credits",
+    "source": "app/api/billing",
+    "outcome": "migrate",
+    "status": "pending",
+    "next_action": "inspect for provider"
+  },
+  {
+    "capability": "webhooks",
+    "source": "app/api/webhooks",
+    "outcome": "preserve",
+    "status": "pending",
+    "next_action": "inspect and recreate under /api/public"
+  },
+  {
+    "capability": "MCP server",
+    "source": "mcp_server",
+    "outcome": "preserve",
+    "status": "pending",
+    "next_action": "inspect"
+  },
+  {
+    "capability": "verification",
+    "source": "-",
+    "outcome": "-",
+    "status": "pending",
+    "next_action": "end-to-end checks"
+  }
+]

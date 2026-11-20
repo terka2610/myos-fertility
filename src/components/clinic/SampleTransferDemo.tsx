@@ -1,0 +1,595 @@
+import { useEffect, useState } from "react";
+import { ArrowRight, FileText } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { formatSampleTimestamp } from "@/components/clinic/SampleRegistryTable";
+import {
+  createInitialSampleTransferState,
+  parseSampleTransferState,
+  SAMPLE_DOCUMENT_FORMS,
+  SAMPLE_TRANSFER_ENTITIES,
+  SAMPLE_TRANSFER_FLOW,
+  SAMPLE_TRANSFER_GATES,
+  SAMPLE_TRANSFER_HANDOFFS,
+  SAMPLE_TRANSFER_STORAGE_KEY,
+  type DemoFormDefinition,
+  type DemoRecordStatus,
+  type SampleTransferState,
+} from "@/lib/demo/sample-transfer";
+
+function statusLabel(status: DemoRecordStatus) {
+  if (status === "complete") return "Completed";
+  if (status === "draft") return "Draft Saved";
+  return "Not Started";
+}
+
+function formatUpdatedAt(value: string | null) {
+  if (!value) return "Not updated";
+  return formatSampleTimestamp(value).text;
+}
+
+export function SampleTransferDemo() {
+  const [state, setState] = useState<SampleTransferState>(createInitialSampleTransferState);
+  const [hydrated, setHydrated] = useState(false);
+  const [canPersist, setCanPersist] = useState(true);
+  const [persistenceMessage, setPersistenceMessage] = useState<string | null>(null);
+  const [activeFormId, setActiveFormId] = useState<string | null>(null);
+  const [formDraft, setFormDraft] = useState<{
+    fields: Record<string, string>;
+    handoff: string;
+    label: string;
+    notes: string;
+  }>({ fields: {}, handoff: "", label: "", notes: "" });
+  const [formMessage, setFormMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(SAMPLE_TRANSFER_STORAGE_KEY);
+      if (saved) setState(parseSampleTransferState(saved));
+    } catch (error) {
+      console.error("Could not load local synthetic transfer demo state", error);
+      setCanPersist(false);
+      setPersistenceMessage(
+        "Saved information could not be loaded. You can continue in this tab, but changes may not persist.",
+      );
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated || !canPersist) return;
+    try {
+      window.localStorage.setItem(
+        SAMPLE_TRANSFER_STORAGE_KEY,
+        JSON.stringify({ version: 2, ...state }),
+      );
+    } catch (error) {
+      console.error("Could not save local synthetic transfer demo state", error);
+      setCanPersist(false);
+      setPersistenceMessage(
+        "Browser storage is unavailable. Changes will remain only for this tab.",
+      );
+    }
+  }, [canPersist, hydrated, state]);
+
+  const forms = SAMPLE_DOCUMENT_FORMS;
+  const activeForm = forms.find((form) => form.id === activeFormId) ?? null;
+  const activeRecord = activeForm ? state.records[activeForm.id] : null;
+  const canCloseTransfer = SAMPLE_TRANSFER_GATES.every(
+    (gate) =>
+      state.records[gate.acceptanceId]?.status === "complete" &&
+      state.records[gate.reconciliationId]?.status === "complete",
+  );
+
+  function openForm(form: DemoFormDefinition) {
+    const record = state.records[form.id];
+    setFormDraft({
+      fields: { ...record.fields },
+      handoff: record.handoff,
+      label: record.label,
+      notes: record.notes,
+    });
+    setFormMessage(null);
+    setActiveFormId(form.id);
+  }
+
+  function saveForm(status: "draft" | "complete") {
+    if (!activeForm) return;
+    const missingFields = activeForm.fields
+      .filter((field) => field.required && !formDraft.fields[field.key]?.trim())
+      .map((field) => field.label);
+    if (status === "complete" && missingFields.length > 0) {
+      setFormMessage(`Complete the required fields: ${missingFields.join(", ")}.`);
+      return;
+    }
+    if (
+      status === "complete" &&
+      formDraft.fields["reconciliationResult"] === "Pending"
+    ) {
+      setFormMessage("A pending reconciliation cannot be marked complete.");
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
+    const statusText = status === "draft" ? "Draft saved" : "Marked as Completed";
+    const direction = activeForm.direction ? ` (${activeForm.direction})` : "";
+    setState((previous) => ({
+      ...previous,
+      records: {
+        ...previous.records,
+        [activeForm.id]: {
+          ...previous.records[activeForm.id]!,
+          label: formDraft.label.trim(),
+          notes: formDraft.notes.trim(),
+          fields: { ...formDraft.fields },
+          handoff: formDraft.handoff,
+          status,
+          updatedAt: timestamp,
+        },
+      },
+      activity: [
+        {
+          id: `${timestamp}-${activeForm.id}-${previous.activity.length}`,
+          at: timestamp,
+          message: `${activeForm.reference} ${activeForm.title}${direction}: ${statusText}`,
+        },
+        ...previous.activity,
+      ].slice(0, 100),
+      closedAt: activeForm.direction && status !== "complete" ? null : previous.closedAt,
+    }));
+    setActiveFormId(null);
+  }
+
+  function closeTransfer() {
+    if (!canCloseTransfer || state.closedAt) return;
+    const timestamp = new Date().toISOString();
+    setState((previous) => ({
+      ...previous,
+      closedAt: timestamp,
+      activity: [
+        {
+          id: `${timestamp}-transfer-closed`,
+          at: timestamp,
+          message: "Transfer closed",
+        },
+        ...previous.activity,
+      ].slice(0, 100),
+    }));
+  }
+
+  const documentForms = forms;
+
+  return (
+    <section className="mt-16 space-y-10" aria-labelledby="transfer-demo-title">
+      <header className="max-w-3xl">
+        <h2 id="transfer-demo-title" className="mt-4 text-4xl md:text-5xl">
+          Sample <span className="serif-accent">Journey</span>
+        </h2>
+        {persistenceMessage && (
+          <p role="alert" className="mt-3 text-sm text-destructive">
+            {persistenceMessage}
+          </p>
+        )}
+        {!hydrated && (
+          <p role="status" aria-live="polite" className="mt-3 text-sm text-muted-foreground">
+            Loading saved records…
+          </p>
+        )}
+      </header>
+
+      <section aria-label="Operational entities" className="grid gap-4 md:grid-cols-3">
+        {SAMPLE_TRANSFER_ENTITIES.map((entity) => (
+          <Card key={entity.name} className="rounded-2xl border-0 bg-card shadow-soft">
+            <CardHeader className="p-5 pb-2">
+              <CardTitle className="text-xl">{entity.name}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-5 pt-1 text-sm text-muted-foreground">
+              Location: {entity.site}
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+
+      <Card className="rounded-[1.5rem] border-0 bg-card shadow-soft">
+        <CardHeader className="p-6 pb-3 md:p-8 md:pb-4">
+          <CardTitle className="text-2xl">Transfer Lifecycle</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Clinic-to-storage transfer and later return journey.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-6 p-6 pt-2 md:p-8 md:pt-3">
+          <ol
+            className="flex flex-wrap items-center gap-3"
+            aria-label="Al Noor Fertility Centre to storage and return journey"
+          >
+            {SAMPLE_TRANSFER_FLOW.map((step, index) => (
+              <li
+                key={`${step.type}-${step.label}-${index}`}
+                className={`flex items-center gap-3 ${step.type === "milestone" ? "basis-full py-2" : ""}`}
+              >
+                <span
+                  className={
+                    step.type === "milestone"
+                      ? "rounded-xl border border-border bg-secondary/60 px-4 py-3 text-sm font-medium"
+                      : "rounded-full bg-pink-soft px-4 py-2 text-sm font-medium"
+                  }
+                >
+                  {step.label}
+                </span>
+                {index < SAMPLE_TRANSFER_FLOW.length - 1 && (
+                  <ArrowRight aria-hidden="true" className="size-4 text-muted-foreground" />
+                )}
+              </li>
+            ))}
+          </ol>
+          <div className="rounded-2xl border border-border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="font-medium">
+                  {state.closedAt
+                    ? "Transfer Closed"
+                    : canCloseTransfer
+                      ? "Ready to Close Transfer"
+                      : "Transfer Closure Blocked"}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Complete outbound and return acceptance and reconciliation records to close the transfer.
+                </p>
+              </div>
+              <Button
+                type="button"
+                onClick={closeTransfer}
+                disabled={!hydrated || !canCloseTransfer || Boolean(state.closedAt)}
+                className="rounded-full"
+              >
+                {state.closedAt ? "Transfer Closed" : "Close Transfer"}
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {SAMPLE_TRANSFER_GATES.map((gate) => {
+              const acceptanceForm = forms.find((form) => form.id === gate.acceptanceId)!;
+              const reconciliationForm = forms.find(
+                (form) => form.id === gate.reconciliationId,
+              )!;
+              const complete =
+                state.records[gate.acceptanceId]?.status === "complete" &&
+                state.records[gate.reconciliationId]?.status === "complete";
+              return (
+                <Card key={gate.id} className="rounded-2xl border border-border shadow-none">
+                  <CardHeader className="p-5 pb-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <CardTitle className="text-xl">{gate.title}</CardTitle>
+                      <Badge variant={complete ? "default" : "secondary"}>
+                        {complete ? "Completed" : "Blocked"}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3 p-5 pt-1">
+                    <GateRecordButton
+                      form={acceptanceForm}
+                      record={state.records[acceptanceForm.id]!}
+                      disabled={!hydrated}
+                      onOpen={() => openForm(acceptanceForm)}
+                    />
+                    <GateRecordButton
+                      form={reconciliationForm}
+                      record={state.records[reconciliationForm.id]!}
+                      disabled={!hydrated}
+                      onOpen={() => openForm(reconciliationForm)}
+                    />
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <section aria-labelledby="documentation-list-title">
+        <div className="mb-5">
+          <h3 id="documentation-list-title" className="text-3xl">
+            Document Register
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            References and names follow the supplied draft register. Transfer routes are
+            configured for this example and should be confirmed before operational use.
+          </p>
+        </div>
+        <div className="space-y-6">
+          {SAMPLE_TRANSFER_ENTITIES.map((entity) => {
+            const entityForms = documentForms.filter((form) => form.owner === entity.name);
+            return (
+              <Card key={entity.name} className="overflow-hidden rounded-[1.5rem] border-0 bg-card shadow-soft">
+                <CardHeader className="p-6 pb-3 md:p-7 md:pb-4">
+                  <CardTitle className="text-2xl">{entity.name}</CardTitle>
+                  <p className="text-sm text-muted-foreground">Location: {entity.site}</p>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Document</TableHead>
+                        <TableHead>Owner</TableHead>
+                        <TableHead>Handoff</TableHead>
+                        <TableHead>Document Status</TableHead>
+                        <TableHead>Last Updated</TableHead>
+                        <TableHead><span className="sr-only">Form action</span></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {entityForms.map((form) => {
+                        const record = state.records[form.id]!;
+                        return (
+                          <TableRow key={form.id}>
+                            <TableCell className="min-w-60">
+                              <span className="font-medium">{form.reference}</span>
+                              <span className="mt-1 block text-sm">{form.title}</span>
+                              {form.direction && (
+                                <span className="mt-1 block text-xs text-muted-foreground">
+                                  {form.direction === "outbound" ? "Outbound transfer" : "Return transfer"}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>{form.owner}</TableCell>
+                            <TableCell className="min-w-48">{record.handoff}</TableCell>
+                            <TableCell>
+                              <RecordStatus status={record.status} />
+                            </TableCell>
+                            <TableCell className="min-w-48 text-xs">
+                              {formatUpdatedAt(record.updatedAt)}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={!hydrated}
+                                aria-label={`Open ${form.reference} ${form.title} Document Form`}
+                                onClick={() => openForm(form)}
+                              >
+                                <FileText aria-hidden="true" />
+                                Open Document Form
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </section>
+
+      <Card className="rounded-[1.5rem] border-0 bg-card shadow-soft">
+        <CardHeader className="p-6 pb-3 md:p-8 md:pb-4">
+          <CardTitle className="text-2xl">Activity History</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Saved form changes and transfer closure events appear here.
+          </p>
+        </CardHeader>
+        <CardContent className="p-6 pt-2 md:p-8 md:pt-3">
+          {state.activity.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No activity recorded yet.
+            </p>
+          ) : (
+            <ol className="space-y-4">
+              {state.activity.map((event) => {
+                const timestamp = formatSampleTimestamp(event.at);
+                return (
+                  <li key={event.id} className="flex flex-col gap-1 border-l-2 border-border pl-4">
+                    <span className="text-sm font-medium">{event.message}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {timestamp.dateTime ? (
+                        <time dateTime={timestamp.dateTime}>{timestamp.text}</time>
+                      ) : (
+                        timestamp.text
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog
+        open={Boolean(activeFormId)}
+        onOpenChange={(open) => {
+          if (!open) setActiveFormId(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          {activeForm && activeRecord && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl">Document Form</DialogTitle>
+                <DialogDescription>
+                  {activeForm.reference}
+                  {activeForm.direction && ` · ${activeForm.direction} transfer`}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2 rounded-xl bg-secondary/60 p-4 text-sm">
+                <p><span className="font-medium">Record Title:</span> {activeForm.title}</p>
+                <p><span className="font-medium">Document Owner:</span> {activeForm.owner}</p>
+                <p><span className="font-medium">Transfer Route:</span> {formDraft.handoff}</p>
+                <p className="text-xs text-muted-foreground">
+                  This route is configured for the example and should be confirmed before operational use.
+                </p>
+              </div>
+              <div className="space-y-4">
+                <div className="block space-y-2">
+                  <Label htmlFor="demo-record-title">Record Title</Label>
+                  <Input
+                    id="demo-record-title"
+                    maxLength={120}
+                    value={formDraft.label}
+                    onChange={(event) =>
+                      setFormDraft((previous) => ({ ...previous, label: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="block space-y-2">
+                  <Label htmlFor="demo-additional-notes">Additional Notes</Label>
+                  <Textarea
+                    id="demo-additional-notes"
+                    maxLength={1000}
+                    rows={3}
+                    value={formDraft.notes}
+                    onChange={(event) =>
+                      setFormDraft((previous) => ({ ...previous, notes: event.target.value }))
+                    }
+                  />
+                </div>
+                {activeForm.fields.map((field) => {
+                  const id = `demo-field-${field.key}`;
+                  const value = formDraft.fields[field.key] ?? "";
+                  const updateValue = (nextValue: string) => {
+                    setFormDraft((previous) => ({
+                      ...previous,
+                      fields: { ...previous.fields, [field.key]: nextValue },
+                    }));
+                  };
+
+                  return (
+                    <div key={field.key} className="block space-y-2">
+                      <Label htmlFor={id}>
+                        {field.label}
+                        {field.required ? " *" : ""}
+                      </Label>
+                      {field.type === "select" ? (
+                        <select
+                          id={id}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          value={value}
+                          onChange={(event) => updateValue(event.target.value)}
+                        >
+                          <option value="">Select an option</option>
+                          {field.options?.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </select>
+                      ) : field.type === "textarea" ? (
+                        <Textarea
+                          id={id}
+                          maxLength={1000}
+                          rows={3}
+                          placeholder={field.placeholder}
+                          value={value}
+                          onChange={(event) => updateValue(event.target.value)}
+                        />
+                      ) : (
+                        <Input
+                          id={id}
+                          type={field.type}
+                          maxLength={200}
+                          placeholder={field.placeholder}
+                          value={value}
+                          onChange={(event) => updateValue(event.target.value)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+                <div className="block space-y-2">
+                  <Label htmlFor="demo-record-handoff">Transfer Route</Label>
+                  <select
+                    id="demo-record-handoff"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={formDraft.handoff}
+                    onChange={(event) =>
+                      setFormDraft((previous) => ({ ...previous, handoff: event.target.value }))
+                    }
+                  >
+                    {SAMPLE_TRANSFER_HANDOFFS.map((handoff) => (
+                      <option key={handoff} value={handoff}>{handoff}</option>
+                    ))}
+                  </select>
+                </div>
+                {formMessage && <p role="alert" className="text-sm text-destructive">{formMessage}</p>}
+              </div>
+              <DialogFooter className="gap-2">
+                <Button type="button" variant="outline" onClick={() => saveForm("draft")}>
+                  Save Draft
+                </Button>
+                <Button type="button" onClick={() => saveForm("complete")}>
+                  Mark as Completed
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
+}
+
+function RecordStatus({ status }: { status: DemoRecordStatus }) {
+  return (
+    <Badge variant={status === "complete" ? "default" : "secondary"}>
+      {statusLabel(status)}
+    </Badge>
+  );
+}
+
+function GateRecordButton({
+  form,
+  record,
+  disabled,
+  onOpen,
+}: {
+  form: DemoFormDefinition;
+  record: SampleTransferState["records"][string];
+  disabled: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-border p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-medium">{form.reference} · {form.title}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {form.owner} · {record.handoff}
+          </p>
+        </div>
+        <RecordStatus status={record.status} />
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="mt-4"
+        disabled={disabled}
+        aria-label={`Open closure checkpoint ${form.reference} ${form.title} Document Form`}
+        onClick={onOpen}
+      >
+        Open Document Form
+      </Button>
+    </div>
+  );
+}
