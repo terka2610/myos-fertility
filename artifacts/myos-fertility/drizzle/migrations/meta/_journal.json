@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1794697797626,
+      "tag": "0000_fertility_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794698602036,
+      "tag": "0001_digital_twin_demo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794699080349,
+      "tag": "0002_twin_review_languages_demo",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794699101812,
+      "tag": "0003_twin_status_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794700011017,
+      "tag": "0004_twin_doctor_videos",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794702511854,
+      "tag": "0005_linq_text_channel",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794703439401,
+      "tag": "0006_linq_awaiting_booking",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+ALTER TABLE public.linq_contacts ADD COLUMN awaiting_booking_at timestamptz;

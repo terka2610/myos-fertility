@@ -1,0 +1,23 @@
+kind = "web"
+previewPath = "/"
+title = "MYOS Fertility"
+description = "The imported MYOS fertility care application, with multilingual doctor digital twins and patient and provider spaces."
+version = "1.0.0"
+id = "artifacts/myos-fertility"
+router = "path"
+
+[[services]]
+name = "web"
+paths = ["/", "/api/linq"]
+localPort = 18587
+
+[services.development]
+run = "pnpm --filter @workspace/myos-fertility run dev"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/myos-fertility", "run", "build"]
+run = "pnpm --filter @workspace/myos-fertility run serve"
+
+[services.env]
+PORT = "18587"
+BASE_PATH = "/"
