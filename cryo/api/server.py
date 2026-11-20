@@ -308,6 +308,13 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
             return
+        if method == "POST" and path == "/api/chat/tick":
+            conn = workflow.connect(self.db_path)
+            try:
+                self.send_json(200, workflow.scheduled_update(conn))
+            finally:
+                conn.close()
+            return
         if method == "POST" and path == "/api/chat/reset":
             conn = workflow.connect(self.db_path)
             try:
@@ -335,6 +342,7 @@ class Handler(BaseHTTPRequestHandler):
                     str(payload.get("text", "")),
                     str(payload.get("event_id") or uuid.uuid4()),
                     None if proposal is None else int(proposal),
+                    payload.get("thread") or None,
                 )
             finally:
                 conn.close()

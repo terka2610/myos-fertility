@@ -11,6 +11,13 @@ import sqlite3
 
 SAMPLE = "SMP-0001"
 ROLES = ("centre", "transport", "storage", "patient")
+ACCOUNTS = ("centre", "transport", "storage")
+THREADS = {
+    "group": ("centre", "transport", "storage"),
+    "clinic-transport": ("centre", "transport"),
+    "clinic-storage": ("centre", "storage"),
+    "transport-storage": ("transport", "storage"),
+}
 PORTAL = "/portal/SMP-0001"
 
 REPLAY = (
@@ -117,6 +124,9 @@ def ensure(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    columns = [row[1] for row in conn.execute("PRAGMA table_info(msg_messages)")]
+    if "thread" not in columns:
+        conn.execute("ALTER TABLE msg_messages ADD COLUMN thread TEXT NOT NULL DEFAULT 'group'")
     conn.commit()
     if conn.execute("SELECT id FROM msg_runs WHERE active = 1").fetchone() is None:
         reset(conn)
@@ -237,10 +247,13 @@ def snapshot(conn: sqlite3.Connection) -> dict:
         "actions": _actions(conn, run, document),
         "hint": _hint(conn, run, document),
         "open_for": _open_for(conn),
+        "accounts": list(ACCOUNTS),
+        "threads": _thread_messages(conn, run["id"]),
+        "thread_members": {name: list(members) for name, members in THREADS.items()},
     }
 
 
-def post_message(conn: sqlite3.Connection, role: str, text: str, event_id: str, proposal_id: int | None = None) -> dict:
+def post_message(conn: sqlite3.Connection, role: str, text: str, event_id: str, proposal_id: int | None = None, thread: str | None = None) -> dict:
     text = (text or "").strip()
     if not text:
         return {"error": "empty message"}
@@ -251,14 +264,21 @@ def post_message(conn: sqlite3.Connection, role: str, text: str, event_id: str, 
             "duplicate": False,
             "reply": "MYOS assistant: This number is not a verified contact.",
         }
+    if role == "patient":
+        thread = "group"
+    else:
+        thread = thread or _default_thread(role)
+        if thread not in THREADS or role not in THREADS[thread]:
+            return {"accepted": False, "error": "this account is not in that chat"}
     try:
-        conn.execute("INSERT INTO msg_messages (run_id, role, direction, body, event_id, created_at) VALUES (?, ?, 'in', ?, ?, ?)", (
-            _run(conn)["id"], role, text, event_id, _tick(conn),
-        ))
+        conn.execute(
+            "INSERT INTO msg_messages (run_id, role, direction, body, event_id, created_at, thread) VALUES (?, ?, 'in', ?, ?, ?, ?)",
+            (_run(conn)["id"], role, text, event_id, _tick(conn), thread),
+        )
     except sqlite3.IntegrityError:
         conn.rollback()
         return {"accepted": True, "duplicate": True}
-    _interpret(conn, role, text, proposal_id)
+    _interpret(conn, role, text, proposal_id, thread)
     conn.commit()
     return {"accepted": True, "duplicate": False}
 
@@ -290,9 +310,11 @@ def act(conn: sqlite3.Connection, action: str) -> dict:
         _say(conn, "centre", "MYOS assistant: Pickup for SMP-0001 has been recorded. Estimated arrival is " + ETA_TIME + ".", "pickup-recorded:centre")
         _say(conn, "storage", "MYOS assistant: Pickup for SMP-0001 has been recorded. Estimated arrival is " + ETA_TIME + ".", "pickup-recorded:storage")
         _say(conn, "patient", "MYOS assistant: Pickup for SMP-0001 has been recorded. Estimated arrival is " + ETA_TIME + ".", "pickup-recorded:patient")
+        _announce(conn, ("group", "clinic-transport", "clinic-storage"), _shipped_text(conn), "shipped")
     elif action == "gps_next":
         _point(conn, run["gps_index"])
         latest = _run(conn)
+        _announce(conn, ("group", "transport-storage"), _position_text(conn), "gps:" + str(latest["gps_index"]))
         if latest["at_destination"]:
             _say(
                 conn,
@@ -316,10 +338,13 @@ def act(conn: sqlite3.Connection, action: str) -> dict:
     return {"ok": True}
 
 
-def _interpret(conn: sqlite3.Connection, role: str, text: str, proposal_id: int | None) -> None:
+def _interpret(conn: sqlite3.Connection, role: str, text: str, proposal_id: int | None, thread: str) -> None:
     folded = text.lower()
     if _asks_safety(folded, text):
         _refer_safety(conn, role)
+        return
+    if _is_question(folded):
+        _say(conn, role, _answer_from_record(conn), "answer:" + thread + ":" + str(_run(conn)["clock"]), thread)
         return
     if "arabic" in folded or "عربي" in text:
         _say(conn, role, _arabic_status(conn), "arabic:" + role + ":" + str(_run(conn)["clock"]))
@@ -597,15 +622,95 @@ def _all_yes(conn: sqlite3.Connection, proposal: sqlite3.Row) -> bool:
     return count == len(EXPECTED[proposal["kind"]])
 
 
-def _say(conn: sqlite3.Connection, role: str, body: str, key: str) -> None:
+def scheduled_update(conn: sqlite3.Connection) -> dict:
+    run = _run(conn)
+    if not run["pickup_recorded"] or run["placed"]:
+        return {"posted": False}
+    _announce(conn, ("group",), _position_text(conn) if run["gps_index"] else _fact(conn), "schedule:" + str(run["gps_index"]) + ":" + str(run["eta_text"]))
+    conn.commit()
+    return {"posted": True}
+
+
+def _say(conn: sqlite3.Connection, role: str, body: str, key: str, thread: str | None = None) -> None:
     run_id = _run(conn)["id"]
     full_key = str(run_id) + ":" + key
     conn.execute(
         """
-        INSERT OR IGNORE INTO msg_messages (run_id, role, direction, body, idempotency_key, created_at)
-        VALUES (?, ?, 'out', ?, ?, ?)
+        INSERT OR IGNORE INTO msg_messages (run_id, role, direction, body, idempotency_key, created_at, thread)
+        VALUES (?, ?, 'out', ?, ?, ?, ?)
         """,
-        (run_id, role, body, full_key, _tick(conn)),
+        (run_id, role, body, full_key, _tick(conn), thread or _default_thread(role)),
+    )
+
+
+def _announce(conn: sqlite3.Connection, threads: tuple, body: str, key: str) -> None:
+    for thread in threads:
+        _say(conn, "agent", body, key + ":" + thread, thread)
+
+
+def _default_thread(role: str) -> str:
+    if role == "centre":
+        return "clinic-transport"
+    if role == "storage":
+        return "clinic-storage"
+    if role == "transport":
+        return "transport-storage"
+    return "group"
+
+
+def _thread_messages(conn: sqlite3.Connection, run_id: int) -> dict:
+    found = {name: [] for name in THREADS}
+    rows = conn.execute(
+        """
+        SELECT thread, role, direction, body, created_at FROM msg_messages
+        WHERE run_id = ? ORDER BY id
+        """,
+        (run_id,),
+    ).fetchall()
+    for row in rows:
+        thread = row["thread"] if row["thread"] in found else "group"
+        found[thread].append({
+            "sender": row["role"],
+            "direction": row["direction"],
+            "body": row["body"],
+            "created_at": row["created_at"],
+        })
+    return found
+
+
+def _is_question(folded: str) -> bool:
+    markers = ("where", "eta", "arrive", "arrival", "status", "document", "location", "how long", "shipped", "?")
+    return any(marker in folded for marker in markers)
+
+
+def _answer_from_record(conn: sqlite3.Connection) -> str:
+    state = _fact(conn)
+    run = _run(conn)
+    point = conn.execute(
+        "SELECT latitude, longitude, timestamp FROM msg_tracking WHERE run_id = ? ORDER BY id DESC LIMIT 1",
+        (run["id"],),
+    ).fetchone()
+    place = "No GPS point is recorded yet."
+    if point is not None:
+        place = "Latest recorded position is %.5f, %.5f at %s." % (point["latitude"], point["longitude"], point["timestamp"])
+    eta = run["eta_text"] or ETA_TIME
+    if run["eta_stale"]:
+        eta = eta + ", and that estimate is stale"
+    return (
+        "MYOS assistant: The recorded status of SMP-0001 is " + state
+        + ". Estimated arrival is " + eta
+        + ". " + place + " This answer uses the saved record only."
+    )
+
+
+def _shipped_text(conn: sqlite3.Connection) -> str:
+    return "MYOS assistant: SMP-0001 has been shipped from the fertility clinic. " + _answer_from_record(conn).replace("MYOS assistant: ", "")
+
+
+def _position_text(conn: sqlite3.Connection) -> str:
+    run = _run(conn)
+    return "MYOS assistant: GPS update for SMP-0001, point %s of %s. %s" % (
+        run["gps_index"], len(REPLAY), _answer_from_record(conn).replace("MYOS assistant: ", "")
     )
 
 

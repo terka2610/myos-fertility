@@ -37,8 +37,8 @@
 <body>
 <header>
   <div>
-    <strong>SMP-0001 simulated chat</strong>
-    <p>Four separate conversations. WhatsApp is not connected.</p>
+    <strong>SMP-0001 chats</strong>
+    <p>Fertility clinic, Cryoport, and CryoNext. One group, and a chat for each pair.</p>
   </div>
   <button id="reset" type="button">Reset demo</button>
 </header>
@@ -67,7 +67,13 @@
   </section>
 </main>
 <script>
-const labels = { centre: "Fertility centre", transport: "Transport", storage: "Storage", patient: "Patient" };
+const accounts = { centre: "Fertility clinic", transport: "Cryoport", storage: "CryoNext storage" };
+const threadLabels = {
+  group: "Group",
+  "clinic-transport": "Clinic and Cryoport",
+  "clinic-storage": "Clinic and CryoNext",
+  "transport-storage": "Cryoport and CryoNext"
+};
 const actionLabels = {
   upload: "Upload document",
   approve: "Approve document",
@@ -79,6 +85,7 @@ const actionLabels = {
 };
 let state = null;
 let role = "centre";
+let thread = "group";
 
 function esc(value) {
   return String(value).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
@@ -106,19 +113,24 @@ function draw() {
   document.getElementById("actions").innerHTML = state.actions.map((action) =>
     '<button type="button" data-action="' + action + '">' + actionLabels[action] + "</button>"
   ).join("");
-  document.getElementById("tabs").innerHTML = Object.keys(labels).map((key) =>
-    '<button type="button" data-role="' + key + '" class="' + (key === role ? "on" : "") + '">' + labels[key] + "</button>"
-  ).join("");
-  const thread = state.conversations[role];
-  document.getElementById("thread").innerHTML = thread.length
-    ? thread.map((item) => '<div class="bubble ' + item.direction + '">' + esc(item.body) + "</div>").join("")
-    : '<p class="muted">No messages in this conversation.</p>';
+  const visible = Object.keys(threadLabels).filter((key) => state.thread_members[key].includes(role));
+  if (!visible.includes(thread)) thread = visible[0];
+  document.getElementById("tabs").innerHTML =
+    Object.keys(accounts).map((key) =>
+      '<button type="button" data-role="' + key + '" class="' + (key === role ? "on" : "") + '">' + accounts[key] + "</button>"
+    ).join("") +
+    visible.map((key) =>
+      '<button type="button" data-thread="' + key + '" class="' + (key === thread ? "on" : "") + '">' + threadLabels[key] + "</button>"
+    ).join("");
+  const messages = state.threads[thread] || [];
+  document.getElementById("thread").innerHTML = messages.length
+    ? messages.map((item) => '<div class="bubble ' + item.direction + '">' + esc(item.body) + "</div>").join("")
+    : '<p class="muted">No messages in this chat yet.</p>';
 }
 
 document.getElementById("tabs").addEventListener("click", (event) => {
-  const next = event.target.dataset.role;
-  if (!next) return;
-  role = next;
+  if (event.target.dataset.role) role = event.target.dataset.role;
+  if (event.target.dataset.thread) thread = event.target.dataset.thread;
   draw();
 });
 
@@ -138,7 +150,7 @@ document.getElementById("composer").addEventListener("submit", async (event) => 
   await fetch("/api/chat/message", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role, text, proposal_id: open ? open.id : null })
+    body: JSON.stringify({ role, text, thread, proposal_id: open ? open.id : null })
   });
   input.value = "";
   await load();
@@ -147,6 +159,7 @@ document.getElementById("composer").addEventListener("submit", async (event) => 
 document.getElementById("reset").addEventListener("click", async () => {
   await fetch("/api/chat/reset", { method: "POST" });
   role = "centre";
+  thread = "group";
   await load();
 });
 
