@@ -1,10 +1,10 @@
-export const DEMO_CLINIC_NAME = "Al Noor Fertility Centre — Abu Dhabi";
+export const FERTILITY_CENTRE_NAME = "Fertility Centre";
 
 export const SAMPLE_TRANSFER_HANDOFFS = [
-  `${DEMO_CLINIC_NAME} → Cryoport`,
-  "Cryoport → Cryogenic Storage",
-  "Cryogenic Storage → Cryoport",
-  `Cryoport → ${DEMO_CLINIC_NAME}`,
+  `${FERTILITY_CENTRE_NAME} → Cryo Transport`,
+  "Cryo Transport → Cryogenic Storage",
+  "Cryogenic Storage → Cryo Transport",
+  `Cryo Transport → ${FERTILITY_CENTRE_NAME}`,
 ] as const;
 
 export type DemoRecordStatus = "not-started" | "draft" | "complete";
@@ -52,31 +52,31 @@ const dateTime = (key: string, label: string): DemoFormField => ({
   required: true,
 });
 
-const select = (
-  key: string,
-  label: string,
-  options: readonly string[],
-): DemoFormField => ({ key, label, type: "select", required: true, options });
+const select = (key: string, label: string, options: readonly string[]): DemoFormField => ({
+  key,
+  label,
+  type: "select",
+  required: true,
+  options,
+});
 
 const sampleId = () => text("sampleId", "Sample ID", "SMP-0001", "SMP-0001");
-const shipmentId = () =>
-  text("shipmentId", "Shipment ID", "DEMO-SHIP-0001", "DEMO-SHIP-0001");
-const staffMember = () =>
-  text("staffMember", "Staff Member", "Staff 01", "Staff 01");
+const shipmentId = () => text("shipmentId", "Shipment ID", "DEMO-SHIP-0001", "DEMO-SHIP-0001");
+const staffMember = () => text("staffMember", "Staff Member", "Staff 01", "Staff 01");
 
 export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
   {
     id: "CLI-001",
     reference: "CLI-001",
     title: "Patient registration",
-    owner: "Fertility Clinic",
+    owner: FERTILITY_CENTRE_NAME,
     handoff: SAMPLE_TRANSFER_HANDOFFS[0],
     direction: null,
     fields: [
       sampleId(),
       text("patientAlias", "Patient", "Patient 01", "Patient 01"),
-      text("sourceFacility", "Source Facility", DEMO_CLINIC_NAME, DEMO_CLINIC_NAME),
-      text("destination", "Destination", "Cryoport", "Cryoport"),
+      text("sourceFacility", "Source Facility", FERTILITY_CENTRE_NAME, FERTILITY_CENTRE_NAME),
+      text("destination", "Destination", "Cryo Transport", "Cryo Transport"),
       dateTime("registeredAt", "Registration date and time"),
       staffMember(),
     ],
@@ -85,13 +85,13 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
     id: "CON-004",
     reference: "CON-004",
     title: "Storage consent",
-    owner: "Fertility Clinic",
+    owner: FERTILITY_CENTRE_NAME,
     handoff: SAMPLE_TRANSFER_HANDOFFS[0],
     direction: null,
     fields: [
       sampleId(),
       text("consentVersion", "Consent Version", "Version reference"),
-      text("sourceFacility", "Source Facility", DEMO_CLINIC_NAME, DEMO_CLINIC_NAME),
+      text("sourceFacility", "Source Facility", FERTILITY_CENTRE_NAME, FERTILITY_CENTRE_NAME),
       text("destination", "Storage Destination", "Cryogenic Storage", "Cryogenic Storage"),
       dateTime("recordedAt", "Record date and time"),
       staffMember(),
@@ -101,14 +101,14 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
     id: "CON-007",
     reference: "CON-007",
     title: "Transfer consent",
-    owner: "Fertility Clinic",
+    owner: FERTILITY_CENTRE_NAME,
     handoff: SAMPLE_TRANSFER_HANDOFFS[0],
     direction: null,
     fields: [
       sampleId(),
       text("consentVersion", "Consent Version", "Version reference"),
-      text("sourceFacility", "Source Facility", DEMO_CLINIC_NAME, DEMO_CLINIC_NAME),
-      text("destination", "Transfer Destination", "Cryoport", "Cryoport"),
+      text("sourceFacility", "Source Facility", FERTILITY_CENTRE_NAME, FERTILITY_CENTRE_NAME),
+      text("destination", "Transfer Destination", "Cryo Transport", "Cryo Transport"),
       dateTime("recordedAt", "Record date and time"),
       staffMember(),
     ],
@@ -117,13 +117,13 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
     id: "LAB-013",
     reference: "LAB-013",
     title: "Sample release authorisation",
-    owner: "Fertility Clinic",
+    owner: FERTILITY_CENTRE_NAME,
     handoff: SAMPLE_TRANSFER_HANDOFFS[0],
     direction: null,
     fields: [
       sampleId(),
-      text("sourceFacility", "Source Facility", DEMO_CLINIC_NAME, DEMO_CLINIC_NAME),
-      text("destination", "Release Destination", "Cryoport", "Cryoport"),
+      text("sourceFacility", "Source Facility", FERTILITY_CENTRE_NAME, FERTILITY_CENTRE_NAME),
+      text("destination", "Release Destination", "Cryo Transport", "Cryo Transport"),
       dateTime("releasedAt", "Release record date and time"),
       staffMember(),
     ],
@@ -132,14 +132,14 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
     id: "SHP-001",
     reference: "SHP-001",
     title: "Shipment booking",
-    owner: "Cryoport Transport",
+    owner: "Cryo Transport",
     handoff: SAMPLE_TRANSFER_HANDOFFS[0],
     direction: null,
     fields: [
       shipmentId(),
       sampleId(),
-      text("sourceFacility", "Source Facility", DEMO_CLINIC_NAME, DEMO_CLINIC_NAME),
-      text("destination", "Destination", "Cryoport", "Cryoport"),
+      text("sourceFacility", "Source Facility", FERTILITY_CENTRE_NAME, FERTILITY_CENTRE_NAME),
+      text("destination", "Destination", "Cryo Transport", "Cryo Transport"),
       dateTime("bookedAt", "Booking date and time"),
       staffMember(),
     ],
@@ -148,7 +148,7 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
     id: "SHP-011",
     reference: "SHP-011",
     title: "Chain-of-custody",
-    owner: "Cryoport Transport",
+    owner: "Cryo Transport",
     handoff: SAMPLE_TRANSFER_HANDOFFS[0],
     direction: null,
     fields: [
@@ -164,7 +164,7 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
     id: "SHP-012",
     reference: "SHP-012",
     title: "Condition monitoring",
-    owner: "Cryoport Transport",
+    owner: "Cryo Transport",
     handoff: SAMPLE_TRANSFER_HANDOFFS[1],
     direction: null,
     fields: [
@@ -179,7 +179,7 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
     id: "SHP-014",
     reference: "SHP-014",
     title: "Handover/collection confirmation",
-    owner: "Cryoport Transport",
+    owner: "Cryo Transport",
     handoff: SAMPLE_TRANSFER_HANDOFFS[2],
     direction: null,
     fields: [
@@ -201,7 +201,7 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
     fields: [
       shipmentId(),
       sampleId(),
-      text("sourceFacility", "Source Facility", "Cryoport", "Cryoport"),
+      text("sourceFacility", "Source Facility", "Cryo Transport", "Cryo Transport"),
       text("receivingFacility", "Receiving Facility", "Cryogenic Storage", "Cryogenic Storage"),
       dateTime("receivedAt", "Receipt date and time"),
       staffMember(),
@@ -233,7 +233,7 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
     fields: [
       shipmentId(),
       sampleId(),
-      text("sourceFacility", "Source Facility", "Cryoport", "Cryoport"),
+      text("sourceFacility", "Source Facility", "Cryo Transport", "Cryo Transport"),
       text("receivingFacility", "Receiving Facility", "Cryogenic Storage", "Cryogenic Storage"),
       dateTime("acceptedAt", "Acceptance record date and time"),
       staffMember(),
@@ -252,7 +252,11 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
       sampleId(),
       text("expectedSealId", "Expected Seal ID", "DEMO-SEAL-0001", "DEMO-SEAL-0001"),
       text("observedSealId", "Observed Seal ID", "DEMO-SEAL-0001", "DEMO-SEAL-0001"),
-      select("reconciliationResult", "Reconciliation Result", ["Matched", "Discrepancy recorded", "Pending"]),
+      select("reconciliationResult", "Reconciliation Result", [
+        "Matched",
+        "Discrepancy recorded",
+        "Pending",
+      ]),
       dateTime("reconciledAt", "Reconciliation date and time"),
       staffMember(),
     ],
@@ -267,8 +271,8 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
     fields: [
       shipmentId(),
       sampleId(),
-      text("sourceFacility", "Source Facility", "Cryoport", "Cryoport"),
-      text("receivingFacility", "Receiving Facility", DEMO_CLINIC_NAME, DEMO_CLINIC_NAME),
+      text("sourceFacility", "Source Facility", "Cryo Transport", "Cryo Transport"),
+      text("receivingFacility", "Receiving Facility", FERTILITY_CENTRE_NAME, FERTILITY_CENTRE_NAME),
       dateTime("acceptedAt", "Acceptance record date and time"),
       staffMember(),
       text("sealId", "Seal ID", "DEMO-SEAL-0001", "DEMO-SEAL-0001"),
@@ -286,7 +290,11 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
       sampleId(),
       text("expectedSealId", "Expected Seal ID", "DEMO-SEAL-0001", "DEMO-SEAL-0001"),
       text("observedSealId", "Observed Seal ID", "DEMO-SEAL-0001", "DEMO-SEAL-0001"),
-      select("reconciliationResult", "Reconciliation Result", ["Matched", "Discrepancy recorded", "Pending"]),
+      select("reconciliationResult", "Reconciliation Result", [
+        "Matched",
+        "Discrepancy recorded",
+        "Pending",
+      ]),
       dateTime("reconciledAt", "Reconciliation date and time"),
       staffMember(),
     ],
@@ -294,18 +302,18 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
 ];
 
 export const SAMPLE_TRANSFER_ENTITIES = [
-  { name: "Fertility Clinic", site: DEMO_CLINIC_NAME },
-  { name: "Cryoport Transport", site: "Cryoport" },
+  { name: FERTILITY_CENTRE_NAME, site: FERTILITY_CENTRE_NAME },
+  { name: "Cryo Transport", site: "Cryo Transport" },
   { name: "Cryogenic Storage", site: "Cryogenic Storage" },
 ] as const;
 
 export const SAMPLE_TRANSFER_FLOW = [
-  { type: "location", label: DEMO_CLINIC_NAME },
-  { type: "location", label: "Cryoport" },
+  { type: "location", label: FERTILITY_CENTRE_NAME },
+  { type: "location", label: "Cryo Transport" },
   { type: "location", label: "Cryogenic Storage" },
-  { type: "milestone", label: "Several years later — patient requests return" },
-  { type: "location", label: "Cryoport" },
-  { type: "location", label: DEMO_CLINIC_NAME },
+  { type: "milestone", label: "Patient requests return after several years" },
+  { type: "location", label: "Cryo Transport" },
+  { type: "location", label: FERTILITY_CENTRE_NAME },
 ] as const;
 
 export const SAMPLE_TRANSFER_GATES = [
@@ -395,26 +403,26 @@ function migrateLegacyText(value: string): string {
   const handoff = LEGACY_HANDOFFS[value];
   if (handoff) return handoff;
   return value
-    .replace(/\bClinic A\b/g, DEMO_CLINIC_NAME)
+    .replace(/\bClinic A\b/g, FERTILITY_CENTRE_NAME)
+    .replace(/Al Noor Fertility Centre — Abu Dhabi/g, FERTILITY_CENTRE_NAME)
+    .replace(/\bFertility Clinic\b/g, FERTILITY_CENTRE_NAME)
+    .replace(/\bCryoport(?: Transport)?\b/g, "Cryo Transport")
     .replace("Synthetic transfer closure completed", "Transfer closed");
 }
 
 function migrateLegacyFieldValue(value: string): string {
   const updated = migrateLegacyText(value);
   const aliases: Record<string, string> = {
-    [`${DEMO_CLINIC_NAME} (demo)`]: DEMO_CLINIC_NAME,
+    [`${FERTILITY_CENTRE_NAME} (demo)`]: FERTILITY_CENTRE_NAME,
     "Cryogenic Storage (demo)": "Cryogenic Storage",
-    "Cryoport (demo)": "Cryoport",
+    "Cryo Transport (demo)": "Cryo Transport",
     "Fictional demo patient": "Patient 01",
     "Demo staff": "Staff 01",
   };
   return aliases[updated] ?? updated;
 }
 
-function parseSavedRecord(
-  value: unknown,
-  form: DemoFormDefinition | undefined,
-): DemoFormRecord {
+function parseSavedRecord(value: unknown, form: DemoFormDefinition | undefined): DemoFormRecord {
   if (
     !isRecord(value) ||
     typeof value["label"] !== "string" ||
@@ -444,14 +452,10 @@ function parseSavedRecord(
   const hasSpecificFields =
     form?.fields.every((field) => Boolean(fields[field.key]?.trim())) ?? false;
   const status =
-    form && value["status"] === "complete" && !hasSpecificFields
-      ? "draft"
-      : value["status"];
+    form && value["status"] === "complete" && !hasSpecificFields ? "draft" : value["status"];
   const legacyHandoff = LEGACY_DEFAULT_HANDOFFS[form?.id ?? ""];
   const handoff =
-    form && legacyHandoff === value["handoff"]
-      ? form.handoff
-      : migrateLegacyText(value["handoff"]);
+    form && legacyHandoff === value["handoff"] ? form.handoff : migrateLegacyText(value["handoff"]);
 
   return {
     label: migrateLegacyText(value["label"]),
@@ -482,10 +486,11 @@ export function parseSampleTransferState(serialized: string): SampleTransferStat
     records[id] = parseSavedRecord(value, formsById.get(id));
   }
 
-  for (const [legacyId, currentId] of [
+  const legacyRecordMigrations: readonly [string, string][] = [
     ["checkpoint:receiving-acceptance", "SHP-016"],
     ["checkpoint:reconciliation", "SHP-017"],
-  ]) {
+  ];
+  for (const [legacyId, currentId] of legacyRecordMigrations) {
     const legacy = records[legacyId];
     const current = records[currentId];
     if (legacy && current && current.status === "not-started" && legacy.status !== "not-started") {

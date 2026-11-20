@@ -77,7 +77,7 @@ function Landing() {
               CRYOSTORAGE WORKFLOW
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Fertility Clinic → Cryoport Transport → Cryogenic Storage → return journey
+              Fertility Centre → Cryo Transport → Cryogenic Storage → return journey
             </p>
             <Button
               asChild

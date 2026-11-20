@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { formatSampleTimestamp } from "@/components/clinic/SampleRegistryTable";
+import { VoiceFormFill } from "@/components/clinic/VoiceFormFill";
 import {
   createInitialSampleTransferState,
   parseSampleTransferState,
@@ -37,8 +38,15 @@ import {
   type SampleTransferState,
 } from "@/lib/demo/sample-transfer";
 
+const statusClassNames: Record<DemoRecordStatus, string> = {
+  "not-started": "border-transparent bg-muted text-muted-foreground",
+  draft: "border-transparent bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200",
+  complete:
+    "border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200",
+};
+
 function statusLabel(status: DemoRecordStatus) {
-  if (status === "complete") return "Completed";
+  if (status === "complete") return "Done";
   if (status === "draft") return "Draft Saved";
   return "Not Started";
 }
@@ -46,6 +54,57 @@ function statusLabel(status: DemoRecordStatus) {
 function formatUpdatedAt(value: string | null) {
   if (!value) return "Not updated";
   return formatSampleTimestamp(value).text;
+}
+
+type ActivityStatus = "completed" | "draft" | "pending" | "error" | "information";
+
+const activityStatusStyles: Record<
+  ActivityStatus,
+  { label: string; badge: string; marker: string }
+> = {
+  completed: {
+    label: "Completed",
+    badge:
+      "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200",
+    marker: "bg-emerald-500",
+  },
+  draft: {
+    label: "Draft saved",
+    badge:
+      "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-900/30 dark:text-amber-200",
+    marker: "bg-amber-500",
+  },
+  pending: {
+    label: "Pending action",
+    badge:
+      "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-900/30 dark:text-amber-200",
+    marker: "bg-amber-500",
+  },
+  error: {
+    label: "Validation error",
+    badge:
+      "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-900/30 dark:text-red-200",
+    marker: "bg-red-500",
+  },
+  information: {
+    label: "Information",
+    badge: "border-border bg-muted text-muted-foreground",
+    marker: "bg-muted-foreground",
+  },
+};
+
+function getActivityStatus(message: string): ActivityStatus {
+  if (/\b(error|failed|failure|exception|invalid|blocked)\b/i.test(message)) return "error";
+  if (/\b(draft saved)\b/i.test(message)) return "draft";
+  if (/\b(pending(?: action)?|action required)\b/i.test(message)) return "pending";
+  if (
+    /\b(marked as completed|document completed|transfer (?:closed|finalized|completed))\b/i.test(
+      message,
+    )
+  ) {
+    return "completed";
+  }
+  return "information";
 }
 
 export function SampleTransferDemo() {
@@ -100,9 +159,18 @@ export function SampleTransferDemo() {
       state.records[gate.acceptanceId]?.status === "complete" &&
       state.records[gate.reconciliationId]?.status === "complete",
   );
+  const outstandingRequirements = SAMPLE_TRANSFER_GATES.flatMap((gate) => [
+    gate.acceptanceId,
+    gate.reconciliationId,
+  ])
+    .map((id) => forms.find((form) => form.id === id)!)
+    .filter((form) => state.records[form.id]?.status !== "complete");
 
   function openForm(form: DemoFormDefinition) {
     const record = state.records[form.id];
+    if (!record) {
+      throw new Error(`Sample transfer record ${form.id} is missing.`);
+    }
     setFormDraft({
       fields: { ...record.fields },
       handoff: record.handoff,
@@ -122,10 +190,7 @@ export function SampleTransferDemo() {
       setFormMessage(`Complete the required fields: ${missingFields.join(", ")}.`);
       return;
     }
-    if (
-      status === "complete" &&
-      formDraft.fields["reconciliationResult"] === "Pending"
-    ) {
+    if (status === "complete" && formDraft.fields["reconciliationResult"] === "Pending") {
       setFormMessage("A pending reconciliation cannot be marked complete.");
       return;
     }
@@ -180,7 +245,7 @@ export function SampleTransferDemo() {
   const documentForms = forms;
 
   return (
-    <section className="mt-16 space-y-10" aria-labelledby="transfer-demo-title">
+    <section className="mt-16 space-y-12" aria-labelledby="transfer-demo-title">
       <header className="max-w-3xl">
         <h2 id="transfer-demo-title" className="mt-4 text-4xl md:text-5xl">
           Sample <span className="serif-accent">Journey</span>
@@ -217,32 +282,43 @@ export function SampleTransferDemo() {
             Clinic-to-storage transfer and later return journey.
           </p>
         </CardHeader>
-        <CardContent className="space-y-6 p-6 pt-2 md:p-8 md:pt-3">
-          <ol
-            className="flex flex-wrap items-center gap-3"
-            aria-label="Al Noor Fertility Centre to storage and return journey"
-          >
-            {SAMPLE_TRANSFER_FLOW.map((step, index) => (
-              <li
-                key={`${step.type}-${step.label}-${index}`}
-                className={`flex items-center gap-3 ${step.type === "milestone" ? "basis-full py-2" : ""}`}
-              >
-                <span
-                  className={
-                    step.type === "milestone"
-                      ? "rounded-xl border border-border bg-secondary/60 px-4 py-3 text-sm font-medium"
-                      : "rounded-full bg-pink-soft px-4 py-2 text-sm font-medium"
-                  }
+        <CardContent className="space-y-8 p-6 pt-2 md:p-8 md:pt-3">
+          <div className="-mx-2 overflow-x-auto px-2 pb-2 md:mx-0 md:px-0 xl:overflow-visible">
+            <ol
+              className="flex w-max min-w-full flex-nowrap items-center justify-between gap-1"
+              aria-label="Fertility Centre to storage and return journey"
+            >
+              {SAMPLE_TRANSFER_FLOW.map((step, index) => (
+                <li
+                  key={`${step.type}-${step.label}-${index}`}
+                  className="flex shrink-0 items-center gap-1"
                 >
-                  {step.label}
-                </span>
-                {index < SAMPLE_TRANSFER_FLOW.length - 1 && (
-                  <ArrowRight aria-hidden="true" className="size-4 text-muted-foreground" />
-                )}
-              </li>
-            ))}
-          </ol>
-          <div className="rounded-2xl border border-border p-4">
+                  <span
+                    className={
+                      step.type === "milestone"
+                        ? "whitespace-nowrap rounded-xl border border-border bg-secondary/60 px-2 py-2 text-xs font-medium sm:text-sm md:text-xs"
+                        : "whitespace-nowrap rounded-full bg-pink-soft px-2 py-2 text-xs font-medium sm:px-4 sm:text-sm md:px-2 md:text-xs"
+                    }
+                  >
+                    {step.label}
+                  </span>
+                  {index < SAMPLE_TRANSFER_FLOW.length - 1 && (
+                    <ArrowRight
+                      aria-hidden="true"
+                      className="size-4 shrink-0 text-muted-foreground"
+                    />
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+          <div
+            className={`rounded-2xl border p-6 ${
+              canCloseTransfer
+                ? "border-border bg-background"
+                : "border-amber-300 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/20"
+            }`}
+          >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="font-medium">
@@ -250,10 +326,12 @@ export function SampleTransferDemo() {
                     ? "Transfer Closed"
                     : canCloseTransfer
                       ? "Ready to Close Transfer"
-                      : "Transfer Closure Blocked"}
+                      : "Action Required to Complete Transfer"}
                 </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Complete outbound and return acceptance and reconciliation records to close the transfer.
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+                  {canCloseTransfer
+                    ? "All required documents and handover steps are complete."
+                    : "Some required documents or handover steps are still pending. Complete the outstanding items to finalize this transfer."}
                 </p>
               </div>
               <Button
@@ -265,13 +343,32 @@ export function SampleTransferDemo() {
                 {state.closedAt ? "Transfer Closed" : "Close Transfer"}
               </Button>
             </div>
+            {!canCloseTransfer && (
+              <ul
+                aria-label="Outstanding transfer requirements"
+                className="mt-5 grid gap-3 border-t border-amber-300/70 pt-4 sm:grid-cols-2 dark:border-amber-800"
+              >
+                {outstandingRequirements.map((form) => (
+                  <li
+                    key={form.id}
+                    className="flex items-start justify-between gap-3 rounded-xl bg-background/80 p-3 text-sm"
+                  >
+                    <span className="min-w-0">
+                      <span className="font-medium">{form.reference}</span>
+                      {" · "}
+                      {form.title}
+                      {form.direction && ` (${form.direction})`}
+                    </span>
+                    <RecordStatus status={state.records[form.id]!.status} />
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2">
             {SAMPLE_TRANSFER_GATES.map((gate) => {
               const acceptanceForm = forms.find((form) => form.id === gate.acceptanceId)!;
-              const reconciliationForm = forms.find(
-                (form) => form.id === gate.reconciliationId,
-              )!;
+              const reconciliationForm = forms.find((form) => form.id === gate.reconciliationId)!;
               const complete =
                 state.records[gate.acceptanceId]?.status === "complete" &&
                 state.records[gate.reconciliationId]?.status === "complete";
@@ -280,8 +377,15 @@ export function SampleTransferDemo() {
                   <CardHeader className="p-5 pb-3">
                     <div className="flex items-center justify-between gap-3">
                       <CardTitle className="text-xl">{gate.title}</CardTitle>
-                      <Badge variant={complete ? "default" : "secondary"}>
-                        {complete ? "Completed" : "Blocked"}
+                      <Badge
+                        variant="outline"
+                        className={
+                          complete
+                            ? statusClassNames.complete
+                            : "border-transparent bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200"
+                        }
+                      >
+                        {complete ? "Done" : "Pending"}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -312,15 +416,18 @@ export function SampleTransferDemo() {
             Document Register
           </h3>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            References and names follow the supplied draft register. Transfer routes are
-            configured for this example and should be confirmed before operational use.
+            References and names follow the supplied draft register. Transfer routes are configured
+            for this example and should be confirmed before operational use.
           </p>
         </div>
         <div className="space-y-6">
           {SAMPLE_TRANSFER_ENTITIES.map((entity) => {
             const entityForms = documentForms.filter((form) => form.owner === entity.name);
             return (
-              <Card key={entity.name} className="overflow-hidden rounded-[1.5rem] border-0 bg-card shadow-soft">
+              <Card
+                key={entity.name}
+                className="overflow-hidden rounded-[1.5rem] border-0 bg-card shadow-soft"
+              >
                 <CardHeader className="p-6 pb-3 md:p-7 md:pb-4">
                   <CardTitle className="text-2xl">{entity.name}</CardTitle>
                   <p className="text-sm text-muted-foreground">Location: {entity.site}</p>
@@ -334,7 +441,9 @@ export function SampleTransferDemo() {
                         <TableHead>Handoff</TableHead>
                         <TableHead>Document Status</TableHead>
                         <TableHead>Last Updated</TableHead>
-                        <TableHead><span className="sr-only">Form action</span></TableHead>
+                        <TableHead>
+                          <span className="sr-only">Form action</span>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -347,7 +456,9 @@ export function SampleTransferDemo() {
                               <span className="mt-1 block text-sm">{form.title}</span>
                               {form.direction && (
                                 <span className="mt-1 block text-xs text-muted-foreground">
-                                  {form.direction === "outbound" ? "Outbound transfer" : "Return transfer"}
+                                  {form.direction === "outbound"
+                                    ? "Outbound transfer"
+                                    : "Return transfer"}
                                 </span>
                               )}
                             </TableCell>
@@ -393,23 +504,41 @@ export function SampleTransferDemo() {
         </CardHeader>
         <CardContent className="p-6 pt-2 md:p-8 md:pt-3">
           {state.activity.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No activity recorded yet.
-            </p>
+            <p className="text-sm text-muted-foreground">No activity recorded yet.</p>
           ) : (
-            <ol className="space-y-4">
-              {state.activity.map((event) => {
+            <ol aria-label="Activity History events" className="space-y-0">
+              {state.activity.map((event, index) => {
                 const timestamp = formatSampleTimestamp(event.at);
+                const status = activityStatusStyles[getActivityStatus(event.message)];
                 return (
-                  <li key={event.id} className="flex flex-col gap-1 border-l-2 border-border pl-4">
-                    <span className="text-sm font-medium">{event.message}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {timestamp.dateTime ? (
-                        <time dateTime={timestamp.dateTime}>{timestamp.text}</time>
-                      ) : (
-                        timestamp.text
+                  <li key={event.id} className="relative flex gap-3 pb-5 last:pb-0">
+                    <span className="relative flex w-3 shrink-0 justify-center">
+                      {index < state.activity.length - 1 && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute top-3 bottom-0 w-px bg-border"
+                        />
                       )}
+                      <span
+                        aria-hidden="true"
+                        className={`relative mt-1.5 size-2.5 rounded-full ring-4 ring-card ${status.marker}`}
+                      />
                     </span>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">{event.message}</span>
+                        <Badge variant="outline" className={status.badge}>
+                          {status.label}
+                        </Badge>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {timestamp.dateTime ? (
+                          <time dateTime={timestamp.dateTime}>{timestamp.text}</time>
+                        ) : (
+                          timestamp.text
+                        )}
+                      </span>
+                    </div>
                   </li>
                 );
               })}
@@ -435,13 +564,36 @@ export function SampleTransferDemo() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-2 rounded-xl bg-secondary/60 p-4 text-sm">
-                <p><span className="font-medium">Record Title:</span> {activeForm.title}</p>
-                <p><span className="font-medium">Document Owner:</span> {activeForm.owner}</p>
-                <p><span className="font-medium">Transfer Route:</span> {formDraft.handoff}</p>
+                <p>
+                  <span className="font-medium">Record Title:</span> {activeForm.title}
+                </p>
+                <p>
+                  <span className="font-medium">Document Owner:</span> {activeForm.owner}
+                </p>
+                <p>
+                  <span className="font-medium">Transfer Route:</span> {formDraft.handoff}
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  This route is configured for the example and should be confirmed before operational use.
+                  This route is configured for the example and should be confirmed before
+                  operational use.
                 </p>
               </div>
+              <VoiceFormFill
+                fields={activeForm.fields}
+                notesLabel={activeForm.id === "SHP-001" ? "Transport Notes" : "Additional Notes"}
+                formTitle={activeForm.title}
+                currentValues={formDraft.fields}
+                currentLabel={formDraft.label}
+                currentNotes={formDraft.notes}
+                onApply={(updates) =>
+                  setFormDraft((previous) => ({
+                    ...previous,
+                    fields: { ...previous.fields, ...updates.fields },
+                    label: updates.label ?? previous.label,
+                    notes: updates.notes ?? previous.notes,
+                  }))
+                }
+              />
               <div className="space-y-4">
                 <div className="block space-y-2">
                   <Label htmlFor="demo-record-title">Record Title</Label>
@@ -455,7 +607,9 @@ export function SampleTransferDemo() {
                   />
                 </div>
                 <div className="block space-y-2">
-                  <Label htmlFor="demo-additional-notes">Additional Notes</Label>
+                  <Label htmlFor="demo-additional-notes">
+                    {activeForm.id === "SHP-001" ? "Transport Notes" : "Additional Notes"}
+                  </Label>
                   <Textarea
                     id="demo-additional-notes"
                     maxLength={1000}
@@ -491,7 +645,9 @@ export function SampleTransferDemo() {
                         >
                           <option value="">Select an option</option>
                           {field.options?.map((option) => (
-                            <option key={option} value={option}>{option}</option>
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
                           ))}
                         </select>
                       ) : field.type === "textarea" ? (
@@ -527,11 +683,17 @@ export function SampleTransferDemo() {
                     }
                   >
                     {SAMPLE_TRANSFER_HANDOFFS.map((handoff) => (
-                      <option key={handoff} value={handoff}>{handoff}</option>
+                      <option key={handoff} value={handoff}>
+                        {handoff}
+                      </option>
                     ))}
                   </select>
                 </div>
-                {formMessage && <p role="alert" className="text-sm text-destructive">{formMessage}</p>}
+                {formMessage && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {formMessage}
+                  </p>
+                )}
               </div>
               <DialogFooter className="gap-2">
                 <Button type="button" variant="outline" onClick={() => saveForm("draft")}>
@@ -551,7 +713,7 @@ export function SampleTransferDemo() {
 
 function RecordStatus({ status }: { status: DemoRecordStatus }) {
   return (
-    <Badge variant={status === "complete" ? "default" : "secondary"}>
+    <Badge variant="outline" className={statusClassNames[status]}>
       {statusLabel(status)}
     </Badge>
   );
@@ -572,7 +734,9 @@ function GateRecordButton({
     <div className="rounded-2xl border border-border p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-medium">{form.reference} · {form.title}</h3>
+          <h3 className="font-medium">
+            {form.reference} · {form.title}
+          </h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {form.owner} · {record.handoff}
           </p>

@@ -9,9 +9,7 @@ import { SampleTransferDemo } from "@/components/clinic/SampleTransferDemo";
 import { sampleDataSource } from "@/lib/samples/data";
 
 export const Route = createFileRoute("/clinic/samples")({
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): { selectedClinicId?: string } => {
+  validateSearch: (search: Record<string, unknown>): { selectedClinicId?: string } => {
     const selectedClinicId = search["selectedClinicId"];
     return typeof selectedClinicId === "string" ? { selectedClinicId } : {};
   },
@@ -34,9 +32,7 @@ function RegistryPage({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <PublicHeader />
-      <main className="mx-auto max-w-6xl px-5 pb-16 pt-8 md:px-10 md:pt-14">
-        {children}
-      </main>
+      <main className="mx-auto max-w-7xl px-5 pb-16 pt-8 md:px-10 md:pt-14">{children}</main>
       <div className="bg-card">
         <PublicFooter />
       </div>
@@ -61,12 +57,11 @@ function RegistryHeading() {
         Sample <span className="serif-accent">registry</span>
       </h1>
       <p className="mt-5 text-lg leading-8 text-muted-foreground">
-        Demonstration environment. All patient and transfer records are simulated. Forms are
-        not valid clinical or legal authorisations.
+        Demonstration environment. All patient and transfer records are simulated. Forms are not
+        valid clinical or legal authorisations.
       </p>
       <p className="mt-3 text-sm leading-6 text-muted-foreground">
-        Al Noor Fertility Centre — Abu Dhabi is a fictional example created for this
-        demonstration, not a MYOS partner.
+        All clinic and transfer details are generic examples created for this demonstration.
       </p>
     </header>
   );
@@ -86,9 +81,7 @@ function ClinicSamples() {
             <CardTitle className="text-2xl">No sample records yet</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">
-              No sample records are available.
-            </p>
+            <p className="text-muted-foreground">No sample records are available.</p>
           </CardContent>
         </Card>
       )}
