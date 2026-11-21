@@ -66,6 +66,14 @@ interface VoiceTarget {
 interface VoiceProposal extends VoiceTarget {
   value: string;
   replaceExisting: boolean;
+  /** A date was heard for a date-and-time field, but no time; the user must add it. */
+  needsTime?: boolean;
+}
+
+const COMPLETE_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+
+function isIncompleteDateTime(proposal: VoiceProposal) {
+  return proposal.type === "datetime-local" && !COMPLETE_DATE_TIME.test(proposal.value);
 }
 
 export interface VoiceFormUpdates {
@@ -701,7 +709,16 @@ export function VoiceFormFill({
           (candidate) => candidate.kind === "field" && candidate.key === suggestion.fieldId,
         );
         if (!target || (form && isProtectedField(target.key, form))) return [];
-        return [{ ...target, value: suggestion.value, replaceExisting: false }];
+        const needsTime =
+          target.type === "datetime-local" && /^\d{4}-\d{2}-\d{2}$/.test(suggestion.value);
+        return [
+          {
+            ...target,
+            value: suggestion.value,
+            replaceExisting: false,
+            ...(needsTime ? { needsTime: true } : {}),
+          },
+        ];
       });
 
       if (aiProposals.length > 0) {
@@ -746,6 +763,7 @@ export function VoiceFormFill({
     const updates: VoiceFormUpdates = { fields: {} };
     let appliedCount = 0;
     for (const proposal of proposals) {
+      if (isIncompleteDateTime(proposal)) continue;
       if (hasConflict(proposal) && !proposal.replaceExisting) continue;
       if (proposal.kind === "field") updates.fields[proposal.key] = proposal.value;
       if (proposal.kind === "label") updates.label = proposal.value;
@@ -803,7 +821,10 @@ export function VoiceFormFill({
     setApplied(false);
   }
 
-  const canApply = proposals.some((proposal) => !hasConflict(proposal) || proposal.replaceExisting);
+  const missingTime = proposals.some(isIncompleteDateTime);
+  const canApply =
+    !missingTime &&
+    proposals.some((proposal) => !hasConflict(proposal) || proposal.replaceExisting);
 
   return (
     <section
@@ -913,6 +934,41 @@ export function VoiceFormFill({
                               </option>
                             ))}
                           </select>
+                        ) : proposal.needsTime ? (
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <Input
+                                id={inputId}
+                                aria-label={`Proposed ${proposal.label} date`}
+                                type="date"
+                                value={proposal.value.slice(0, 10)}
+                                onChange={(event) =>
+                                  updateProposal(proposal.id, {
+                                    value: [event.target.value, proposal.value.slice(11, 16)]
+                                      .filter(Boolean)
+                                      .join("T"),
+                                  })
+                                }
+                              />
+                              <Input
+                                aria-label={`Proposed ${proposal.label} time`}
+                                type="time"
+                                value={proposal.value.slice(11, 16)}
+                                onChange={(event) =>
+                                  updateProposal(proposal.id, {
+                                    value: event.target.value
+                                      ? `${proposal.value.slice(0, 10)}T${event.target.value}`
+                                      : proposal.value.slice(0, 10),
+                                  })
+                                }
+                              />
+                            </div>
+                            {isIncompleteDateTime(proposal) && (
+                              <p className="text-xs text-amber-700 dark:text-amber-400">
+                                Date heard, but no time. Enter the time to apply this field.
+                              </p>
+                            )}
+                          </div>
                         ) : proposal.type === "textarea" ? (
                           <Textarea
                             id={inputId}

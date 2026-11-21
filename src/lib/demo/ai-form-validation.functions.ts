@@ -31,10 +31,14 @@ function dubaiContext(now = new Date()) {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
   }).formatToParts(now);
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return {
     date: `${value["year"]}-${value["month"]}-${value["day"]}`,
+    time: `${value["hour"]}:${value["minute"]}`,
     timezone: "Asia/Dubai",
   };
 }
@@ -154,7 +158,7 @@ export const extractVoiceFieldsWithAI = createServerFn({ method: "POST" })
             {
               role: "system",
               content:
-                'Extract only explicitly stated values from the transcript into editable MYOS form fields. Return JSON: {"suggestions":[{"fieldId":"actual field ID","value":"value","confidence":0.0}]}. Do not invent missing values. Never suggest protected IDs, patient identity, specimen counts, consent, authorisation, reconciliation, custody or seal fields. Resolve obvious speech recognition mistakes from the supplied labels, for example "additional NERS", "additional nurse", or "additional nerts" means Additional Notes unless the form uses Transport Notes. Map "record date" or "record date and time" to the matching date/datetime field. For date fields use YYYY-MM-DD. For datetime-local fields use YYYY-MM-DDTHH:mm only when a time is explicitly stated; if only a date is stated, return the date field value as YYYY-MM-DD or no suggestion for a field that requires time. For text and textarea preserve natural wording. For select fields use exactly one listed allowed value. Use Asia/Dubai for date interpretation.',
+                'Extract only explicitly stated values from the transcript into editable MYOS form fields. Return JSON: {"suggestions":[{"fieldId":"actual field ID","value":"value","confidence":0.0}]}. Do not invent missing values. Never suggest protected IDs, patient identity, specimen counts, consent, authorisation, reconciliation, custody or seal fields. Resolve obvious speech recognition mistakes from the supplied labels, for example "additional NERS", "additional nurse", or "additional nerts" means Additional Notes unless the form uses Transport Notes. Map "record date" or "record date and time" to the matching date/datetime field. For date fields use YYYY-MM-DD. For datetime-local fields use YYYY-MM-DDTHH:mm when a time is stated; if only a date is stated, still return the date as YYYY-MM-DD (the user will add the time) and never guess a time. If the speaker says now, just now or right now, use currentDateTimeAsiaDubai date and time. For text and textarea preserve natural wording. For select fields use exactly one listed allowed value. Use Asia/Dubai for date interpretation.',
             },
             {
               role: "user",
@@ -201,7 +205,8 @@ export const extractVoiceFieldsWithAI = createServerFn({ method: "POST" })
           }
           if (field.type === "datetime-local") {
             const normalized = normalizeExtractedDate(suggestion.value, now);
-            if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(normalized)) return null;
+            // A date without a time is kept so the review step can ask for the time.
+            if (!/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/.test(normalized)) return null;
             return { ...suggestion, value: normalized };
           }
           if (field.type === "select") {

@@ -131,4 +131,49 @@ describe("VoiceFormFill Groq extraction", () => {
     );
     expect(screen.getByLabelText("Proposed Record Date")).toHaveValue("2026-11-21");
   });
+  it("fills a spoken date into a date-and-time field and asks for the time before applying", async () => {
+    const form = getFormDefinition("SHP-016")!;
+    let applied: VoiceFormUpdates | null = null;
+    render(
+      <VoiceFormFill
+        formId="SHP-016"
+        fields={form.fields}
+        notesLabel="Additional Notes"
+        formTitle={form.title}
+        currentValues={{ acceptedAt: "" }}
+        currentLabel=""
+        currentNotes=""
+        onApply={(updates) => {
+          applied = updates;
+        }}
+        extractor={async () => ({
+          enabled: true,
+          suggestions: [
+            { fieldId: "acceptedAt", value: "2026-11-21", confidence: 0.95 },
+            { fieldId: "notes", value: "safe cryo", confidence: 0.9 },
+          ],
+          message: "AI suggestions are ready for review.",
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Fill by Voice" }));
+    fireEvent.change(screen.getByLabelText("Recognized transcript (or type/paste)"), {
+      target: { value: "Record date is 21st November, additional notes safe cryo" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+
+    const dateLabel = "Proposed Acceptance record date and time date";
+    await waitFor(() => expect(screen.getByLabelText(dateLabel)).toHaveValue("2026-11-21"));
+    expect(screen.getByText(/Date heard, but no time/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Proposed Acceptance record date and time time"), {
+      target: { value: "14:30" },
+    });
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(applied).toEqual({ fields: { acceptedAt: "2026-11-21T14:30" }, notes: "safe cryo" });
+  });
 });
