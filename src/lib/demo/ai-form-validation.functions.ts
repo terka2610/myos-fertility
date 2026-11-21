@@ -113,6 +113,7 @@ export const extractVoiceFieldsWithAI = createServerFn({ method: "POST" })
       type: field.type,
       required: field.required,
       options: field.options ?? null,
+      exampleFormat: field.placeholder ?? null,
       protected: isProtectedField(field.key, form),
     }));
     editableFields.push({
@@ -121,6 +122,7 @@ export const extractVoiceFieldsWithAI = createServerFn({ method: "POST" })
       type: "text",
       required: false,
       options: null,
+      exampleFormat: null,
       protected: false,
     });
     editableFields.push({
@@ -129,6 +131,7 @@ export const extractVoiceFieldsWithAI = createServerFn({ method: "POST" })
       type: "textarea",
       required: false,
       options: null,
+      exampleFormat: null,
       protected: false,
     });
     editableFields.push({
@@ -137,6 +140,7 @@ export const extractVoiceFieldsWithAI = createServerFn({ method: "POST" })
       type: "text",
       required: false,
       options: null,
+      exampleFormat: null,
       protected: true,
     });
 
@@ -158,7 +162,7 @@ export const extractVoiceFieldsWithAI = createServerFn({ method: "POST" })
             {
               role: "system",
               content:
-                'Extract only explicitly stated values from the transcript into editable MYOS form fields. Return JSON: {"suggestions":[{"fieldId":"actual field ID","value":"value","confidence":0.0}]}. Do not invent missing values. Never suggest protected IDs, patient identity, specimen counts, consent, authorisation, reconciliation, custody or seal fields. Resolve obvious speech recognition mistakes from the supplied labels, for example "additional NERS", "additional nurse", or "additional nerts" means Additional Notes unless the form uses Transport Notes. Map "record date" or "record date and time" to the matching date/datetime field. For date fields use YYYY-MM-DD. For datetime-local fields use YYYY-MM-DDTHH:mm when a time is stated; if only a date is stated, still return the date as YYYY-MM-DD (the user will add the time) and never guess a time. If the speaker says now, just now or right now, use currentDateTimeAsiaDubai date and time. For text and textarea preserve natural wording. For select fields use exactly one listed allowed value. Use Asia/Dubai for date interpretation.',
+                'Extract only explicitly stated values from the transcript into editable MYOS form fields. Return JSON: {"suggestions":[{"fieldId":"actual field ID","value":"value","confidence":0.0}]}. Do not invent missing values. Never suggest protected IDs, patient identity, specimen counts, consent, authorisation, reconciliation, custody or seal fields. Resolve obvious speech recognition mistakes from the supplied labels, for example "additional NERS", "additional nurse", or "additional nerts" means Additional Notes unless the form uses Transport Notes. Map "record date" or "record date and time" to the matching date/datetime field. For date fields use YYYY-MM-DD. For datetime-local fields use YYYY-MM-DDTHH:mm when a time is stated; if only a date is stated, still return the date as YYYY-MM-DD (the user will add the time) and never guess a time. If the speaker says now, just now or right now, use currentDateTimeAsiaDubai date and time. Speech recognition often mishears words, especially numbers ("to"/"too" for two, "for" for four, "won" for one) and verb endings ("ship today" for shipped today). When a field has an exampleFormat, rewrite the spoken value to match that format, for example "staff to" becomes "Staff 02" when the example is "Staff 01". For text and textarea otherwise preserve the spoken wording, fixing only clearly misheard words; never add new facts. For select fields use exactly one listed allowed value. Use Asia/Dubai for date interpretation.',
             },
             {
               role: "user",
