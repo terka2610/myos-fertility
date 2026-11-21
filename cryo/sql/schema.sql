@@ -106,3 +106,5 @@ as $$
   join public.facilities d on d.code = s.destination_facility
   where s.public_id = sample_code;
 $$;
+
+grant execute on function public.sample_snapshot(text) to anon, authenticated;

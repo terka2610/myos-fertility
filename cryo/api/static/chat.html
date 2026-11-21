@@ -49,6 +49,7 @@
       <p id="doc"></p>
       <p id="schedule"></p>
       <p id="hint" class="muted"></p>
+      <p id="phones" class="muted"></p>
     </div>
     <div class="card">
       <h2>Location</h2>
@@ -102,6 +103,10 @@ function draw() {
   const eta = state.schedule.eta_stale ? state.schedule.eta + " (stale)" : state.schedule.eta;
   document.getElementById("schedule").textContent = state.schedule.status + " · estimate " + eta;
   document.getElementById("hint").textContent = state.hint;
+  const phones = state.whatsapp || {};
+  document.getElementById("phones").textContent = phones.centre
+    ? "WhatsApp · clinic " + phones.centre + " · Cryoport " + phones.transport + " · storage " + phones.storage
+    : "";
   const gps = document.getElementById("gps");
   gps.textContent = state.tracking
     ? "Replay point " + state.gps_index + " of " + state.gps_total

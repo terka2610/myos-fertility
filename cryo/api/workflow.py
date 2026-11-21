@@ -12,6 +12,11 @@ import sqlite3
 SAMPLE = "SMP-0001"
 ROLES = ("centre", "transport", "storage", "patient")
 ACCOUNTS = ("centre", "transport", "storage")
+WHATSAPP = {
+    "centre": "+421902950910",
+    "storage": "+421911713703",
+    "transport": "+233544511586",
+}
 THREADS = {
     "group": ("centre", "transport", "storage"),
     "clinic-transport": ("centre", "transport"),
@@ -248,13 +253,26 @@ def snapshot(conn: sqlite3.Connection) -> dict:
         "hint": _hint(conn, run, document),
         "open_for": _open_for(conn),
         "accounts": list(ACCOUNTS),
+        "whatsapp": dict(WHATSAPP),
         "threads": _thread_messages(conn, run["id"]),
         "thread_members": {name: list(members) for name, members in THREADS.items()},
     }
 
 
+def _role_for(sender: str) -> str:
+    sender = (sender or "").strip()
+    if sender in ROLES:
+        return sender
+    digits = "".join(ch for ch in sender if ch.isdigit())
+    for role, number in WHATSAPP.items():
+        if digits and digits == "".join(ch for ch in number if ch.isdigit()):
+            return role
+    return sender
+
+
 def post_message(conn: sqlite3.Connection, role: str, text: str, event_id: str, proposal_id: int | None = None, thread: str | None = None) -> dict:
     text = (text or "").strip()
+    role = _role_for(role)
     if not text:
         return {"error": "empty message"}
     if role not in ROLES:
