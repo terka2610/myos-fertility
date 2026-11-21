@@ -27,6 +27,7 @@ import { Route as AuthenticatedDoctorRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as BookTessaRouteImport } from './routes/book.tessa'
+import { Route as ClinicJourneyCalendarRouteImport } from './routes/clinic/journey-calendar'
 import { Route as ClinicSamplesRouteImport } from './routes/clinic/samples'
 import { Route as ProgramsEggFreezingRouteImport } from './routes/programs/egg-freezing'
 import { Route as ProgramsIvfCareRouteImport } from './routes/programs/ivf-care'
@@ -131,6 +132,11 @@ const BookTessaRoute = BookTessaRouteImport.update({
   path: '/book/tessa',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClinicJourneyCalendarRoute = ClinicJourneyCalendarRouteImport.update({
+  id: '/clinic/journey-calendar',
+  path: '/clinic/journey-calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ClinicSamplesRoute = ClinicSamplesRouteImport.update({
   id: '/clinic/samples',
   path: '/clinic/samples',
@@ -219,6 +225,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof AuthenticatedHistoryRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/book/tessa': typeof BookTessaRoute
+  '/clinic/journey-calendar': typeof ClinicJourneyCalendarRoute
   '/clinic/samples': typeof ClinicSamplesRoute
   '/programs/egg-freezing': typeof ProgramsEggFreezingRoute
   '/programs/ivf-care': typeof ProgramsIvfCareRoute
@@ -250,6 +257,7 @@ export interface FileRoutesByTo {
   '/history': typeof AuthenticatedHistoryRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/book/tessa': typeof BookTessaRoute
+  '/clinic/journey-calendar': typeof ClinicJourneyCalendarRoute
   '/clinic/samples': typeof ClinicSamplesRoute
   '/programs/egg-freezing': typeof ProgramsEggFreezingRoute
   '/programs/ivf-care': typeof ProgramsIvfCareRoute
@@ -284,6 +292,7 @@ export interface FileRoutesById {
   '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/book/tessa': typeof BookTessaRoute
+  '/clinic/journey-calendar': typeof ClinicJourneyCalendarRoute
   '/clinic/samples': typeof ClinicSamplesRoute
   '/programs/egg-freezing': typeof ProgramsEggFreezingRoute
   '/programs/ivf-care': typeof ProgramsIvfCareRoute
@@ -318,6 +327,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/settings'
     | '/book/tessa'
+    | '/clinic/journey-calendar'
     | '/clinic/samples'
     | '/programs/egg-freezing'
     | '/programs/ivf-care'
@@ -349,6 +359,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/settings'
     | '/book/tessa'
+    | '/clinic/journey-calendar'
     | '/clinic/samples'
     | '/programs/egg-freezing'
     | '/programs/ivf-care'
@@ -382,6 +393,7 @@ export interface FileRouteTypes {
     | '/_authenticated/history'
     | '/_authenticated/settings'
     | '/book/tessa'
+    | '/clinic/journey-calendar'
     | '/clinic/samples'
     | '/programs/egg-freezing'
     | '/programs/ivf-care'
@@ -411,6 +423,7 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   ResourcesRoute: typeof ResourcesRouteWithChildren
   BookTessaRoute: typeof BookTessaRoute
+  ClinicJourneyCalendarRoute: typeof ClinicJourneyCalendarRoute
   ClinicSamplesRoute: typeof ClinicSamplesRoute
   ProgramsEggFreezingRoute: typeof ProgramsEggFreezingRoute
   ProgramsIvfCareRoute: typeof ProgramsIvfCareRoute
@@ -543,6 +556,13 @@ declare module '@tanstack/react-router' {
       path: '/book/tessa'
       fullPath: '/book/tessa'
       preLoaderRoute: typeof BookTessaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clinic/journey-calendar': {
+      id: '/clinic/journey-calendar'
+      path: '/clinic/journey-calendar'
+      fullPath: '/clinic/journey-calendar'
+      preLoaderRoute: typeof ClinicJourneyCalendarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/clinic/samples': {
@@ -701,6 +721,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   ResourcesRoute: ResourcesRouteWithChildren,
   BookTessaRoute: BookTessaRoute,
+  ClinicJourneyCalendarRoute: ClinicJourneyCalendarRoute,
   ClinicSamplesRoute: ClinicSamplesRoute,
   ProgramsEggFreezingRoute: ProgramsEggFreezingRoute,
   ProgramsIvfCareRoute: ProgramsIvfCareRoute,

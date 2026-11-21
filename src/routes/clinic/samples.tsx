@@ -1,19 +1,45 @@
-import { createFileRoute, Link, type ErrorComponentProps } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
-import { PublicFooter, PublicHeader } from "@/components/myos/PublicHeader";
-import { Badge } from "@/components/ui/badge";
+import { createFileRoute, type ErrorComponentProps } from "@tanstack/react-router";
+import { CryogenicWorkflowLayout } from "@/components/clinic/CryogenicWorkflowLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SampleRegistryTable } from "@/components/clinic/SampleRegistryTable";
 import { SampleTransferDemo } from "@/components/clinic/SampleTransferDemo";
 import { sampleDataSource } from "@/lib/samples/data";
+import { readSupabaseSample } from "@/lib/samples/supabase.functions";
+import type { SupabaseSampleResponse } from "@/lib/samples/supabase.functions";
+import type { SampleRegistryRecord } from "@/lib/samples/types";
 
 export const Route = createFileRoute("/clinic/samples")({
   validateSearch: (search: Record<string, unknown>): { selectedClinicId?: string } => {
     const selectedClinicId = search["selectedClinicId"];
     return typeof selectedClinicId === "string" ? { selectedClinicId } : {};
   },
-  loader: () => sampleDataSource.listSamples(),
+  loader: async (): Promise<{
+    samples: readonly SampleRegistryRecord[];
+    connected: boolean;
+    errorMessage: string | null;
+  }> => {
+    try {
+      const result = (await readSupabaseSample({
+        data: { sampleId: "SMP-0001" },
+      })) as SupabaseSampleResponse;
+      if (result.connected && result.sample) {
+        return { samples: [result.sample], connected: true, errorMessage: null };
+      }
+      return {
+        samples: await sampleDataSource.listSamples(),
+        connected: false,
+        errorMessage: result.error.message,
+      };
+    } catch (error) {
+      console.warn("Supabase sample read failed; using synthetic fallback", error);
+      return {
+        samples: await sampleDataSource.listSamples(),
+        connected: false,
+        errorMessage: error instanceof Error ? error.message : "Supabase read unavailable",
+      };
+    }
+  },
   pendingComponent: SampleRegistryLoading,
   errorComponent: SampleRegistryError,
   head: () => ({
@@ -21,83 +47,53 @@ export const Route = createFileRoute("/clinic/samples")({
       { title: "Clinic sample registry — MYOS" },
       {
         name: "description",
-        content: "A sample registry and transfer journey for the MYOS demonstration.",
+        content: "A sample registry and transfer journey for the MYOS cryogenic workflow.",
       },
     ],
   }),
   component: ClinicSamples,
 });
 
-function RegistryPage({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-background">
-      <PublicHeader />
-      <main className="mx-auto max-w-7xl px-5 pb-16 pt-8 md:px-10 md:pt-14">{children}</main>
-      <div className="bg-card">
-        <PublicFooter />
-      </div>
-    </div>
-  );
-}
-
-function RegistryHeading() {
-  return (
-    <header className="mb-8 max-w-3xl">
-      <Link
-        to="/"
-        className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft aria-hidden="true" className="size-4" />
-        Back to Home
-      </Link>
-      <Badge variant="secondary" className="rounded-full px-3 py-1">
-        Demo
-      </Badge>
-      <h1 className="mt-5 text-5xl md:text-7xl">
-        Sample <span className="serif-accent">registry</span>
-      </h1>
-      <p className="mt-5 text-lg leading-8 text-muted-foreground">
-        Demonstration environment. All patient and transfer records are simulated. Forms are not
-        valid clinical or legal authorisations.
-      </p>
-      <p className="mt-3 text-sm leading-6 text-muted-foreground">
-        All clinic and transfer details are generic examples created for this demonstration.
-      </p>
-    </header>
-  );
-}
-
 function ClinicSamples() {
-  const samples = Route.useLoaderData();
+  const { samples, connected, errorMessage } = Route.useLoaderData();
 
   return (
-    <RegistryPage>
-      <RegistryHeading />
-      {samples.length > 0 ? (
-        <SampleRegistryTable samples={samples} />
-      ) : (
-        <Card className="rounded-[1.5rem] border-0 bg-card shadow-soft">
-          <CardHeader>
-            <CardTitle className="text-2xl">No sample records yet</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">No sample records are available.</p>
-          </CardContent>
-        </Card>
-      )}
+    <CryogenicWorkflowLayout title="Sample" accent="registry" activePage="sample-registry">
+      <div id="sample-registry" className="scroll-mt-24">
+        {!connected && (
+          <p
+            role="status"
+            className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+          >
+            Simulated data. Supabase read unavailable
+            {errorMessage ? `: ${errorMessage}` : "."}
+          </p>
+        )}
+        {samples.length > 0 ? (
+          <SampleRegistryTable samples={samples} />
+        ) : (
+          <Card className="rounded-[1.5rem] border-0 bg-card shadow-soft">
+            <CardHeader>
+              <CardTitle className="text-2xl">No sample records yet</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">No sample records are available.</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
       <SampleTransferDemo />
-    </RegistryPage>
+    </CryogenicWorkflowLayout>
   );
 }
 
 function SampleRegistryLoading() {
   return (
-    <RegistryPage>
-      <RegistryHeading />
+    <CryogenicWorkflowLayout title="Sample" accent="registry" activePage="sample-registry">
       <p role="status" aria-live="polite" className="text-muted-foreground">
         Loading sample records…
       </p>
-    </RegistryPage>
+    </CryogenicWorkflowLayout>
   );
 }
 
@@ -105,8 +101,7 @@ function SampleRegistryError({ error, reset }: ErrorComponentProps) {
   console.error("Sample registry failed to load", error);
 
   return (
-    <RegistryPage>
-      <RegistryHeading />
+    <CryogenicWorkflowLayout title="Sample" accent="registry" activePage="sample-registry">
       <Card className="rounded-[1.5rem] border-0 bg-card shadow-soft">
         <CardHeader>
           <CardTitle className="text-2xl">Sample registry unavailable</CardTitle>
@@ -120,6 +115,6 @@ function SampleRegistryError({ error, reset }: ErrorComponentProps) {
           </Button>
         </CardContent>
       </Card>
-    </RegistryPage>
+    </CryogenicWorkflowLayout>
   );
 }

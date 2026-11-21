@@ -24,6 +24,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { formatSampleTimestamp } from "@/components/clinic/SampleRegistryTable";
 import { VoiceFormFill } from "@/components/clinic/VoiceFormFill";
+import { AIFormValidation } from "@/components/clinic/AIFormValidation";
 import {
   createInitialSampleTransferState,
   parseSampleTransferState,
@@ -410,10 +411,10 @@ export function SampleTransferDemo() {
         </CardContent>
       </Card>
 
-      <section aria-labelledby="documentation-list-title">
+      <section id="documents" aria-labelledby="documentation-list-title" className="scroll-mt-24">
         <div className="mb-5">
           <h3 id="documentation-list-title" className="text-3xl">
-            Document Register
+            Transfer Documents
           </h3>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             References and names follow the supplied draft register. Transfer routes are configured
@@ -495,7 +496,10 @@ export function SampleTransferDemo() {
         </div>
       </section>
 
-      <Card className="rounded-[1.5rem] border-0 bg-card shadow-soft">
+      <Card
+        id="activity-history"
+        className="scroll-mt-24 rounded-[1.5rem] border-0 bg-card shadow-soft"
+      >
         <CardHeader className="p-6 pb-3 md:p-8 md:pb-4">
           <CardTitle className="text-2xl">Activity History</CardTitle>
           <p className="text-sm text-muted-foreground">
@@ -593,6 +597,27 @@ export function SampleTransferDemo() {
                     notes: updates.notes ?? previous.notes,
                   }))
                 }
+              />
+              <AIFormValidation
+                formId={activeForm.id}
+                fields={formDraft.fields}
+                label={formDraft.label}
+                notes={formDraft.notes}
+                handoff={formDraft.handoff}
+                onApply={(fieldKey, correction) => {
+                  if (fieldKey === "label") {
+                    setFormDraft((previous) => ({ ...previous, label: correction }));
+                  } else if (fieldKey === "notes") {
+                    setFormDraft((previous) => ({ ...previous, notes: correction }));
+                  } else if (fieldKey === "handoff") {
+                    setFormDraft((previous) => ({ ...previous, handoff: correction }));
+                  } else {
+                    setFormDraft((previous) => ({
+                      ...previous,
+                      fields: { ...previous.fields, [fieldKey]: correction },
+                    }));
+                  }
+                }}
               />
               <div className="space-y-4">
                 <div className="block space-y-2">

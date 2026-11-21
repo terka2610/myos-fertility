@@ -6,7 +6,7 @@ import { SYNTHETIC_SAMPLE_RECORDS } from "@/lib/samples/fixtures";
 
 describe("SampleRegistryTable", () => {
   it("displays the synthetic record and all six registry fields", () => {
-    render(<SampleRegistryTable samples={SYNTHETIC_SAMPLE_RECORDS} />);
+    render(<SampleRegistryTable samples={SYNTHETIC_SAMPLE_RECORDS.slice(0, 1)} />);
 
     const table = screen.getByRole("table");
     const headers = within(table)
@@ -24,14 +24,10 @@ describe("SampleRegistryTable", () => {
     expect(within(table).getByText("SMP-0001")).toBeInTheDocument();
     expect(within(table).getByText("Fictional demo patient")).toBeInTheDocument();
     expect(within(table).getByText("Oocyte")).toBeInTheDocument();
-    expect(within(table).getByText("Returned to Clinic A")).toBeInTheDocument();
-    expect(within(table).getByText("Synthetic cryogenic storage site")).toBeInTheDocument();
-    expect(
-      within(table).getByText("Nov 20, 2026, 12:30 PM GST (UTC+4)"),
-    ).toBeInTheDocument();
-    expect(table.querySelector("time")?.getAttribute("datetime")).toBe(
-      "2026-11-20T08:30:00.000Z",
-    );
+    expect(within(table).getByText("Returned to Fertility Centre")).toBeInTheDocument();
+    expect(within(table).getByText("Cryogenic Storage")).toBeInTheDocument();
+    expect(within(table).getByText("Nov 20, 2026, 12:30 PM GST (UTC+4)")).toBeInTheDocument();
+    expect(table.querySelector("time")?.getAttribute("datetime")).toBe("2026-11-20T08:30:00.000Z");
   });
 
   it("formats timestamps in Asia/Dubai across a date boundary", () => {

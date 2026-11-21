@@ -1,10 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -29,12 +24,9 @@ const DUBAI_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat("en", {
 });
 
 type FormattedSampleTimestamp =
-  | { text: string; dateTime: string }
-  | { text: string; dateTime?: never };
+  { text: string; dateTime: string } | { text: string; dateTime?: never };
 
-export function formatSampleTimestamp(
-  value: string | null | undefined,
-): FormattedSampleTimestamp {
+export function formatSampleTimestamp(value: string | null | undefined): FormattedSampleTimestamp {
   if (typeof value !== "string" || value.trim() === "") {
     return { text: "Timestamp unavailable" };
   }
@@ -63,21 +55,31 @@ export function formatSampleTimestamp(
   };
 }
 
-export function SampleRegistryTable({
-  samples,
-}: {
-  samples: readonly SampleRegistryRecord[];
-}) {
+export function SampleRegistryTable({ samples }: { samples: readonly SampleRegistryRecord[] }) {
   return (
     <Card className="overflow-hidden rounded-[1.5rem] border-0 bg-card shadow-soft">
       <CardHeader className="p-6 pb-4 md:p-8 md:pb-5">
-        <CardTitle className="text-2xl">Sample records</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="text-2xl">Sample records</CardTitle>
+          {samples.length > 0 && (
+            <Badge
+              variant="outline"
+              className={
+                samples.every((sample) => sample.source === "supabase")
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-amber-200 bg-amber-50 text-amber-900"
+              }
+            >
+              {samples.every((sample) => sample.source === "supabase")
+                ? "Supabase connected"
+                : "Simulated data"}
+            </Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="px-6 pb-6 md:px-8 md:pb-8">
         <Table>
-          <TableCaption>
-            Sample registry records.
-          </TableCaption>
+          <TableCaption>Sample registry records.</TableCaption>
           <TableHeader>
             <TableRow>
               <TableHead>Sample display ID</TableHead>

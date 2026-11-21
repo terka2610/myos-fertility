@@ -29,4 +29,12 @@ describe("App routing", () => {
 
     expect(router.matchRoutes("/clinic/samples").at(-1)?.routeId).toBe("/clinic/samples");
   });
+
+  it("registers the cryogenic journey calendar as a separate route", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+
+    expect(router.matchRoutes("/clinic/journey-calendar").at(-1)?.routeId).toBe(
+      "/clinic/journey-calendar",
+    );
+  });
 });
