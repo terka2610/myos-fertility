@@ -77,12 +77,6 @@ export function JourneyRouteReplay({
               {connected && points.length > 0 ? "Recorded Route" : "Route Replay"} for {sampleId}
             </p>
           </div>
-          <Badge
-            variant="outline"
-            className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
-          >
-            {connected && points.length > 0 ? "Recorded Route" : "Simulated data"}
-          </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-4 p-6 pt-2">
@@ -94,7 +88,7 @@ export function JourneyRouteReplay({
             <MapPin aria-hidden="true" className="size-8 text-muted-foreground" />
             <p className="mt-3 font-medium">No replay points available</p>
             <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-              Route replay will appear when authorized route_points data is available.
+              Recorded route information will appear when available.
             </p>
           </div>
         ) : (

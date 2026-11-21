@@ -38,6 +38,7 @@ import {
   type DemoRecordStatus,
   type SampleTransferState,
 } from "@/lib/demo/sample-transfer";
+import { useSyntheticRole, type SyntheticRole } from "@/lib/demo/synthetic-role";
 
 const statusClassNames: Record<DemoRecordStatus, string> = {
   "not-started": "border-transparent bg-muted text-muted-foreground",
@@ -109,6 +110,7 @@ function getActivityStatus(message: string): ActivityStatus {
 }
 
 export function SampleTransferDemo() {
+  const [role] = useSyntheticRole();
   const [state, setState] = useState<SampleTransferState>(createInitialSampleTransferState);
   const [hydrated, setHydrated] = useState(false);
   const [canPersist, setCanPersist] = useState(true);
@@ -160,12 +162,15 @@ export function SampleTransferDemo() {
       state.records[gate.acceptanceId]?.status === "complete" &&
       state.records[gate.reconciliationId]?.status === "complete",
   );
-  const outstandingRequirements = SAMPLE_TRANSFER_GATES.flatMap((gate) => [
+  const outstandingRequirementIds = SAMPLE_TRANSFER_GATES.flatMap((gate) => [
     gate.acceptanceId,
     gate.reconciliationId,
   ])
-    .map((id) => forms.find((form) => form.id === id)!)
-    .filter((form) => state.records[form.id]?.status !== "complete");
+    .map((id) => forms.find((form) => form.id === id))
+    .filter((form): form is DemoFormDefinition => Boolean(form));
+  const outstandingRequirements = outstandingRequirementIds.filter(
+    (form) => state.records[form.id]?.status !== "complete",
+  );
 
   function openForm(form: DemoFormDefinition) {
     const record = state.records[form.id];
@@ -244,6 +249,7 @@ export function SampleTransferDemo() {
   }
 
   const documentForms = forms;
+  const roleEntities = SAMPLE_TRANSFER_ENTITIES;
 
   return (
     <section className="mt-16 space-y-12" aria-labelledby="transfer-demo-title">
@@ -264,7 +270,7 @@ export function SampleTransferDemo() {
       </header>
 
       <section aria-label="Operational entities" className="grid gap-4 md:grid-cols-3">
-        {SAMPLE_TRANSFER_ENTITIES.map((entity) => (
+        {roleEntities.map((entity) => (
           <Card key={entity.name} className="rounded-2xl border-0 bg-card shadow-soft">
             <CardHeader className="p-5 pb-2">
               <CardTitle className="text-xl">{entity.name}</CardTitle>
@@ -366,7 +372,11 @@ export function SampleTransferDemo() {
               </ul>
             )}
           </div>
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div
+            className="grid gap-6 lg:grid-cols-2"
+            role="region"
+            aria-label={`${role === "Cryogenic Storage" ? "Storage role custody" : `${role} role transfer lifecycle`}`}
+          >
             {SAMPLE_TRANSFER_GATES.map((gate) => {
               const acceptanceForm = forms.find((form) => form.id === gate.acceptanceId)!;
               const reconciliationForm = forms.find((form) => form.id === gate.reconciliationId)!;
@@ -411,7 +421,12 @@ export function SampleTransferDemo() {
         </CardContent>
       </Card>
 
-      <section id="documents" aria-labelledby="documentation-list-title" className="scroll-mt-24">
+      <section
+        id="documents"
+        aria-labelledby="documentation-list-title"
+        aria-label={`${role === "Fertility Centre" ? "Fertility Centre" : role === "Cryo Transport" ? "Transport" : "Storage"} role documents`}
+        className="scroll-mt-24"
+      >
         <div className="mb-5">
           <h3 id="documentation-list-title" className="text-3xl">
             Transfer Documents

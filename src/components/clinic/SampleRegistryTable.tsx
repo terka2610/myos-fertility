@@ -71,7 +71,7 @@ export function SampleRegistryTable({ samples }: { samples: readonly SampleRegis
               }
             >
               {samples.every((sample) => sample.source === "supabase")
-                ? "Supabase connected"
+                ? "Recorded data"
                 : "Simulated data"}
             </Badge>
           )}

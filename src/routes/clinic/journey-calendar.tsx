@@ -37,7 +37,9 @@ export const Route = createFileRoute("/clinic/journey-calendar")({
         requestedSampleId,
       };
     } catch (error) {
-      console.warn("Supabase journey read failed; using synthetic fallback", error);
+      if (import.meta.env.DEV) {
+        console.warn("Journey data unavailable; using simulation", error);
+      }
       return {
         connected: false as const,
         sample: null,
@@ -45,7 +47,7 @@ export const Route = createFileRoute("/clinic/journey-calendar")({
         routePoints: [],
         error: {
           kind: "network" as const,
-          message: error instanceof Error ? error.message : "Supabase read unavailable",
+          message: "Live information is unavailable.",
         },
         requestedSampleId,
       };
@@ -142,8 +144,8 @@ function JourneyCalendar() {
               </div>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                 {connected
-                  ? `Authorized custody and route records for ${sample.displayId}.`
-                  : `The schedule and route replay for ${sample.displayId} are simulated. No location is live.`}
+                  ? `Custody and route information for ${sample.displayId}.`
+                  : `The schedule and route replay for ${sample.displayId} are simulated.`}
               </p>
             </div>
             <label className="block text-sm">

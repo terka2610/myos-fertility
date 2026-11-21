@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { PublicFooter, PublicHeader } from "@/components/myos/PublicHeader";
-import { Badge } from "@/components/ui/badge";
+import { SYNTHETIC_ROLES, useSyntheticRole } from "@/lib/demo/synthetic-role";
 
 type WorkflowPage = "sample-registry" | "journey-calendar";
 
@@ -70,6 +70,7 @@ export function CryogenicWorkflowLayout({
   activePage: WorkflowPage;
   children: ReactNode;
 }) {
+  const [role, setRole] = useSyntheticRole();
   return (
     <div className="min-h-screen bg-background">
       <PublicHeader />
@@ -82,9 +83,6 @@ export function CryogenicWorkflowLayout({
             <ArrowLeft aria-hidden="true" className="size-4" />
             Back to Home
           </Link>
-          <Badge variant="secondary" className="rounded-full px-3 py-1">
-            Cryogenic Workflow
-          </Badge>
           <h1 className="mt-5 text-5xl md:text-7xl">
             {title} <span className="serif-accent">{accent}</span>
           </h1>
@@ -96,6 +94,23 @@ export function CryogenicWorkflowLayout({
             Clinic and transfer details use generic facility names.
           </p>
         </header>
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-3 text-sm font-medium">
+            <span className="text-muted-foreground">Viewing as</span>
+            <select
+              aria-label="Viewing as"
+              value={role}
+              onChange={(event) => setRole(event.target.value as (typeof SYNTHETIC_ROLES)[number])}
+              className="h-10 min-w-48 rounded-md border border-input bg-background px-3"
+            >
+              {SYNTHETIC_ROLES.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <CryogenicWorkflowNavigation activePage={activePage} />
         {children}
       </main>

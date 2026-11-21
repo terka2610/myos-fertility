@@ -37,4 +37,15 @@ describe("App routing", () => {
       "/clinic/journey-calendar",
     );
   });
+
+  it("supports sample-specific journey calendar navigation", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+    const location = router.buildLocation({
+      to: "/clinic/journey-calendar",
+      search: { sampleId: "SMP-0002" },
+    });
+
+    expect(location.pathname).toBe("/clinic/journey-calendar");
+    expect(location.searchStr).toBe("?sampleId=SMP-0002");
+  });
 });

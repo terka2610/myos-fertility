@@ -15,7 +15,7 @@ describe("JourneyRouteReplay", () => {
       />,
     );
 
-    expect(screen.getAllByText("Simulated data").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Route Replay/)).toBeInTheDocument();
     expect(
       screen.getByRole("img", { name: "Simulated route map for SMP-0001" }),
     ).toBeInTheDocument();

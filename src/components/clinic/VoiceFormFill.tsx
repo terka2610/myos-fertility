@@ -403,9 +403,9 @@ function extractVoiceValues(
 function exampleValue(target: VoiceTarget) {
   if (target.type === "datetime-local") return "November 25, 2026 at 2:30 PM";
   if (target.type === "select") return target.options?.[0] ?? "Matched";
-  if (target.kind === "notes") return "synthetic demo notes";
-  if (target.kind === "label") return "synthetic demo record";
-  return target.initialValue || "synthetic demo value";
+  if (target.kind === "notes") return "synthetic notes";
+  if (target.kind === "label") return "synthetic record";
+  return target.initialValue || "synthetic value";
 }
 
 function currentValueForTarget(
@@ -695,7 +695,7 @@ export function VoiceFormFill({
             </p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
               On-device en-US recognition is attempted first. Standard browser recognition may send
-              audio to an online service. Use synthetic demo data only; do not speak patient
+              audio to an online service. Use synthetic test data only; do not speak patient
               information.
             </p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">

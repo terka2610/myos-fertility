@@ -17,26 +17,25 @@ export const Route = createFileRoute("/clinic/samples")({
   loader: async (): Promise<{
     samples: readonly SampleRegistryRecord[];
     connected: boolean;
-    errorMessage: string | null;
   }> => {
     try {
       const result = (await readSupabaseSample({
         data: { sampleId: "SMP-0001" },
       })) as SupabaseSampleResponse;
       if (result.connected && result.sample) {
-        return { samples: [result.sample], connected: true, errorMessage: null };
+        return { samples: [result.sample], connected: true };
       }
       return {
         samples: await sampleDataSource.listSamples(),
         connected: false,
-        errorMessage: result.error.message,
       };
     } catch (error) {
-      console.warn("Supabase sample read failed; using synthetic fallback", error);
+      if (import.meta.env.DEV) {
+        console.warn("Sample data unavailable; using simulation", error);
+      }
       return {
         samples: await sampleDataSource.listSamples(),
         connected: false,
-        errorMessage: error instanceof Error ? error.message : "Supabase read unavailable",
       };
     }
   },
@@ -55,7 +54,7 @@ export const Route = createFileRoute("/clinic/samples")({
 });
 
 function ClinicSamples() {
-  const { samples, connected, errorMessage } = Route.useLoaderData();
+  const { samples, connected } = Route.useLoaderData();
 
   return (
     <CryogenicWorkflowLayout title="Sample" accent="registry" activePage="sample-registry">
@@ -63,10 +62,9 @@ function ClinicSamples() {
         {!connected && (
           <p
             role="status"
-            className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+            className="mb-4 inline-flex rounded-full border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
           >
-            Simulated data. Supabase read unavailable
-            {errorMessage ? `: ${errorMessage}` : "."}
+            Simulated data. Live sample information is unavailable.
           </p>
         )}
         {samples.length > 0 ? (
