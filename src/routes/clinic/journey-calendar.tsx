@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CryogenicWorkflowLayout } from "@/components/clinic/CryogenicWorkflowLayout";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,58 @@ import type { SupabaseJourneyResponse } from "@/lib/samples/supabase.functions";
 import { JourneyRouteReplay } from "@/components/clinic/JourneyRouteReplay";
 import type { JourneyRoutePoint } from "@/lib/samples/types";
 import { useAuth } from "@/hooks/useAuth";
+import { JourneyMetricsPanel } from "@/components/clinic/JourneyMetricsPanel";
+import {
+  deriveJourneyMetrics,
+  journeyInputFromSupabaseRows,
+  type JourneyMetrics,
+} from "@/lib/samples/journey-metrics";
+import type { SyntheticJourney } from "@/lib/samples/types";
+
+// Cryogenic Storage destination from the synthetic Supabase facilities data.
+const STORAGE_DESTINATION = { lat: 25.2048, lon: 55.2708 };
+
+// Synthetic milestones mapped to the custody steps used by real custody_events.
+const MILESTONE_STEPS: Record<string, string> = {
+  pickup: "released",
+  "transport-handover": "in_transit",
+  "storage-arrival": "arrived_storage",
+  "return-request": "release_requested",
+  "return-handover": "in_transit_return",
+  "return-arrival": "received",
+};
+
+function simulatedJourneyMetrics(journey: SyntheticJourney): {
+  metrics: JourneyMetrics;
+  asOf: string;
+} {
+  const reached = journey.milestones.filter(
+    (milestone) => milestone.status !== "pending" && milestone.at && MILESTONE_STEPS[milestone.id],
+  );
+  const times = [
+    ...journey.routePoints.map((point) => point.recordedAt),
+    ...reached.map((milestone) => milestone.at!),
+  ].sort((first, second) => Date.parse(first) - Date.parse(second));
+  const asOf = times.at(-1) ?? journey.pickupAt;
+  return {
+    asOf,
+    metrics: deriveJourneyMetrics({
+      sampleId: journey.sampleId,
+      now: new Date(asOf),
+      source: "simulation",
+      destination: STORAGE_DESTINATION,
+      locations: journey.routePoints.map((point) => ({
+        lat: point.latitude,
+        lon: point.longitude,
+        recordedAt: point.recordedAt,
+      })),
+      custodyEvents: reached.map((milestone) => ({
+        step: MILESTONE_STEPS[milestone.id]!,
+        recordedAt: milestone.at!,
+      })),
+    }),
+  };
+}
 
 export const Route = createFileRoute("/clinic/journey-calendar")({
   validateSearch: (search: Record<string, unknown>): { sampleId: string } => {
@@ -96,6 +148,28 @@ function JourneyCalendar() {
   const synthetic =
     SYNTHETIC_JOURNEY_CALENDARS.find((item) => item.sampleId === sampleId) ??
     SYNTHETIC_JOURNEY_CALENDARS[0]!;
+  // Real clock only on the client, so server and client renders match.
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const timer = window.setInterval(() => setNow(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const journeyMetrics = useMemo(() => {
+    if (!live.connected) return simulatedJourneyMetrics(synthetic);
+    if (!now) return null;
+    return {
+      asOf: undefined,
+      metrics: deriveJourneyMetrics(
+        journeyInputFromSupabaseRows({
+          sampleId,
+          now,
+          routePoints: live.routePoints,
+          custodyEvents: live.custodyEvents,
+        }),
+      ),
+    };
+  }, [live, now, sampleId, synthetic]);
   const syntheticSample =
     SYNTHETIC_SAMPLE_RECORDS.find((record) => record.displayId === sampleId) ??
     SYNTHETIC_SAMPLE_RECORDS[0]!;
@@ -265,6 +339,10 @@ function JourneyCalendar() {
             </CardContent>
           </Card>
         </section>
+
+        {journeyMetrics && (
+          <JourneyMetricsPanel metrics={journeyMetrics.metrics} asOf={journeyMetrics.asOf} />
+        )}
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <Card className="rounded-[1.5rem] border-0 bg-card shadow-soft">
