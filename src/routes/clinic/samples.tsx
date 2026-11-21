@@ -1,4 +1,5 @@
 import { createFileRoute, type ErrorComponentProps } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { CryogenicWorkflowLayout } from "@/components/clinic/CryogenicWorkflowLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { sampleDataSource } from "@/lib/samples/data";
 import { readSupabaseSample } from "@/lib/samples/supabase.functions";
 import type { SupabaseSampleResponse } from "@/lib/samples/supabase.functions";
 import type { SampleRegistryRecord } from "@/lib/samples/types";
+import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/clinic/samples")({
   validateSearch: (search: Record<string, unknown>): { selectedClinicId?: string } => {
@@ -54,7 +56,32 @@ export const Route = createFileRoute("/clinic/samples")({
 });
 
 function ClinicSamples() {
-  const { samples, connected } = Route.useLoaderData();
+  const loaded = Route.useLoaderData();
+  const { session } = useAuth();
+  const [liveState, setLiveState] = useState(loaded);
+
+  useEffect(() => {
+    if (!session) {
+      setLiveState(loaded);
+      return;
+    }
+    let cancelled = false;
+    void readSupabaseSample({ data: { sampleId: "SMP-0001" } })
+      .then((result) => {
+        if (cancelled) return;
+        if (result.connected && result.sample) {
+          setLiveState({ samples: [result.sample], connected: true });
+        }
+      })
+      .catch((error) => {
+        if (import.meta.env.DEV) console.warn("Authenticated sample read unavailable", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loaded, session]);
+
+  const { samples, connected } = liveState;
 
   return (
     <CryogenicWorkflowLayout title="Sample" accent="registry" activePage="sample-registry">

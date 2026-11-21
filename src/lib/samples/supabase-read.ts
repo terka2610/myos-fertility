@@ -39,10 +39,15 @@ function toRow(value: unknown): Record<string, unknown> | null {
 
 export function mapGenericFacility(value: string | null): string {
   const normalized = value?.toLowerCase() ?? "";
-  if (normalized.includes("fertility") || normalized.includes("clinic")) {
+  if (
+    normalized === "clinic-a" ||
+    normalized.includes("fertility") ||
+    normalized.includes("clinic")
+  ) {
     return "Fertility Centre";
   }
   if (
+    normalized === "cryoport" ||
     normalized.includes("transport") ||
     normalized.includes("ship") ||
     normalized.includes("carrier")
@@ -50,6 +55,7 @@ export function mapGenericFacility(value: string | null): string {
     return "Cryo Transport";
   }
   if (
+    normalized === "cryonext" ||
     normalized.includes("storage") ||
     normalized.includes("cryo") ||
     normalized.includes("tank")
@@ -63,18 +69,20 @@ export function mapSnapshotToRegistry(snapshotValue: unknown, fallbackSampleId =
   const row = toRow(snapshotValue);
   if (!row) return null;
 
-  const displayId =
-    getString(row, ["display_id", "sample_id", "sampleId", "id"]) ?? fallbackSampleId;
+  const displayId = getString(row, ["public_id", "display_id", "sample_id"]) ?? fallbackSampleId;
   const sampleType =
-    getString(row, ["sample_type", "specimen_type", "material", "type"]) ?? "Not specified";
-  const currentState =
-    getString(row, ["current_state", "status", "state", "phase"]) ?? "Status unavailable";
-  const storageSite = mapGenericFacility(
-    getString(row, ["storage_site", "storage", "facility", "tank_location"]),
-  );
-  const latestEventAt =
-    getString(row, ["latest_event_at", "latest_event", "event_at", "updated_at", "created_at"]) ??
-    "";
+    getString(row, ["specimen_type", "sample_type", "material", "type"]) ?? "Not specified";
+  const currentState = getString(row, ["status", "current_state", "state"]) ?? "Status unavailable";
+
+  let facilityCode: string | null = null;
+  const facility = row["facility"];
+  if (facility && typeof facility === "object" && !Array.isArray(facility)) {
+    const facilityObject = facility as Record<string, unknown>;
+    facilityCode = typeof facilityObject["code"] === "string" ? facilityObject["code"] : null;
+  } else if (typeof facility === "string") {
+    facilityCode = facility;
+  }
+  const storageSite = mapGenericFacility(facilityCode);
 
   return {
     displayId,
@@ -82,7 +90,7 @@ export function mapSnapshotToRegistry(snapshotValue: unknown, fallbackSampleId =
     sampleType,
     currentState,
     storageSite,
-    latestEventAt,
+    latestEventAt: "",
     source: "supabase" as const,
   };
 }
@@ -105,6 +113,7 @@ function classifySupabaseError(error: {
   }
   if (
     error.status === 404 ||
+    code === "PGRST202" ||
     /\b(no rows|not found|could not find the function|pgrst116)\b/i.test(message)
   ) {
     return { kind: "missing_sample", message, ...(code ? { code } : {}) };
@@ -146,7 +155,7 @@ export async function readSupabaseSnapshot(
   sampleId: string,
 ): Promise<SupabaseReadResult<unknown>> {
   try {
-    const { data, error } = await supabase.rpc("sample_snapshot", { sample_id: sampleId });
+    const { data, error } = await supabase.rpc("sample_snapshot", { sample_code: sampleId });
     if (error) return { ok: false, error: classifySupabaseError(error) };
     if (!data || (Array.isArray(data) && data.length === 0)) {
       return {
@@ -176,7 +185,7 @@ export async function readSupabaseCustodyEvents(
   try {
     const { data, error } = await supabase
       .from("custody_events")
-      .select("*")
+      .select("id,sample_id,facility_code,step,recorded_at")
       .eq("sample_id", sampleId);
     if (error) return { ok: false, error: classifySupabaseError(error) };
     return { ok: true, data: (data ?? []) as unknown as CustodyEventRow[] };
@@ -198,7 +207,7 @@ export async function readSupabaseRoutePoints(
   try {
     const { data, error } = await supabase
       .from("route_points")
-      .select("*")
+      .select("id,sample_id,lat,lon,recorded_at")
       .eq("sample_id", sampleId);
     if (error) return { ok: false, error: classifySupabaseError(error) };
     return { ok: true, data: (data ?? []) as unknown as RoutePointRow[] };

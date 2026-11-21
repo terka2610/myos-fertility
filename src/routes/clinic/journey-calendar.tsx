@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { CryogenicWorkflowLayout } from "@/components/clinic/CryogenicWorkflowLayout";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { genericFacilityLabel } from "@/lib/samples/supabase.functions";
 import type { SupabaseJourneyResponse } from "@/lib/samples/supabase.functions";
 import { JourneyRouteReplay } from "@/components/clinic/JourneyRouteReplay";
 import type { JourneyRoutePoint } from "@/lib/samples/types";
+import { useAuth } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/clinic/journey-calendar")({
   validateSearch: (search: Record<string, unknown>): { sampleId: string } => {
@@ -66,9 +68,31 @@ export const Route = createFileRoute("/clinic/journey-calendar")({
 });
 
 function JourneyCalendar() {
-  const live = Route.useLoaderData();
+  const loaded = Route.useLoaderData();
+  const { session } = useAuth();
+  const [live, setLive] = useState<SupabaseJourneyResponse>(loaded);
   const navigate = useNavigate();
   const { sampleId } = Route.useSearch();
+
+  useEffect(() => {
+    if (!session) {
+      setLive(loaded);
+      return;
+    }
+    let cancelled = false;
+    void readSupabaseJourney({ data: { sampleId } })
+      .then((result) => {
+        if (!cancelled) setLive(result);
+      })
+      .catch((error) => {
+        if (import.meta.env.DEV) {
+          console.warn("Authenticated journey read unavailable", error);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loaded, sampleId, session]);
   const synthetic =
     SYNTHETIC_JOURNEY_CALENDARS.find((item) => item.sampleId === sampleId) ??
     SYNTHETIC_JOURNEY_CALENDARS[0]!;
@@ -86,13 +110,20 @@ function JourneyCalendar() {
 
   if (connected) {
     replayPoints = live.routePoints.flatMap((point, index) => {
-      const lat = typeof point["latitude"] === "number" ? point["latitude"] : null;
+      const lat =
+        typeof point["lat"] === "number"
+          ? point["lat"]
+          : typeof point["latitude"] === "number"
+            ? point["latitude"]
+            : null;
       const lng =
-        typeof point["longitude"] === "number"
-          ? point["longitude"]
+        typeof point["lon"] === "number"
+          ? point["lon"]
           : typeof point["lng"] === "number"
             ? point["lng"]
-            : null;
+            : typeof point["longitude"] === "number"
+              ? point["longitude"]
+              : null;
       if (lat === null || lng === null) return [];
       const at =
         typeof point["recorded_at"] === "string"
