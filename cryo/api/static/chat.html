@@ -38,7 +38,7 @@
 <header>
   <div>
     <strong>SMP-0001 chats</strong>
-    <p>Fertility clinic, Cryoport, and CryoNext. One group, and a chat for each pair.</p>
+    <p>Admin is in every chat. One announcements group, and a chat for each pair.</p>
   </div>
   <button id="reset" type="button">Reset demo</button>
 </header>
@@ -68,9 +68,9 @@
   </section>
 </main>
 <script>
-const accounts = { centre: "Fertility clinic", transport: "Cryoport", storage: "CryoNext storage" };
+const accounts = { admin: "Admin", centre: "Fertility clinic", transport: "Cryoport", storage: "CryoNext storage", patient: "Patient" };
 const threadLabels = {
-  group: "Group",
+  group: "Announcements",
   "clinic-transport": "Clinic and Cryoport",
   "clinic-storage": "Clinic and CryoNext",
   "transport-storage": "Cryoport and CryoNext"
@@ -85,7 +85,7 @@ const actionLabels = {
   record_placement: "Record placement"
 };
 let state = null;
-let role = "centre";
+let role = "admin";
 let thread = "group";
 
 function esc(value) {
@@ -104,8 +104,8 @@ function draw() {
   document.getElementById("schedule").textContent = state.schedule.status + " · estimate " + eta;
   document.getElementById("hint").textContent = state.hint;
   const phones = state.whatsapp || {};
-  document.getElementById("phones").textContent = phones.centre
-    ? "WhatsApp · clinic " + phones.centre + " · Cryoport " + phones.transport + " · storage " + phones.storage
+  document.getElementById("phones").textContent = phones.admin
+    ? "WhatsApp · admin " + phones.admin + " · clinic " + phones.centre + " · storage " + phones.storage + " · Cryoport and patient still need a number"
     : "";
   const gps = document.getElementById("gps");
   gps.textContent = state.tracking
@@ -163,7 +163,7 @@ document.getElementById("composer").addEventListener("submit", async (event) => 
 
 document.getElementById("reset").addEventListener("click", async () => {
   await fetch("/api/chat/reset", { method: "POST" });
-  role = "centre";
+  role = "admin";
   thread = "group";
   await load();
 });

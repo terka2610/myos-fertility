@@ -10,18 +10,18 @@ from __future__ import annotations
 import sqlite3
 
 SAMPLE = "SMP-0001"
-ROLES = ("centre", "transport", "storage", "patient")
-ACCOUNTS = ("centre", "transport", "storage")
+ROLES = ("admin", "centre", "transport", "storage", "patient")
+ACCOUNTS = ("admin", "centre", "transport", "storage", "patient")
 WHATSAPP = {
+    "admin": "+233544511586",
     "centre": "+421902950910",
     "storage": "+421911713703",
-    "transport": "+233544511586",
 }
 THREADS = {
-    "group": ("centre", "transport", "storage"),
-    "clinic-transport": ("centre", "transport"),
-    "clinic-storage": ("centre", "storage"),
-    "transport-storage": ("transport", "storage"),
+    "group": ("admin", "centre", "transport", "storage", "patient"),
+    "clinic-transport": ("admin", "centre", "transport"),
+    "clinic-storage": ("admin", "centre", "storage"),
+    "transport-storage": ("admin", "transport", "storage"),
 }
 PORTAL = "/portal/SMP-0001"
 
@@ -283,6 +283,8 @@ def post_message(conn: sqlite3.Connection, role: str, text: str, event_id: str, 
             "reply": "MYOS assistant: This number is not a verified contact.",
         }
     if role == "patient":
+        thread = "group"
+    elif role == "admin" and not thread:
         thread = "group"
     else:
         thread = thread or _default_thread(role)
