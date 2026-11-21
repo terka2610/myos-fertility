@@ -73,7 +73,8 @@ export function resolveVoiceFieldId(rawFieldId: string, form: DemoFormDefinition
     if (candidates.includes(raw)) return field.key;
   }
 
-  if (raw === "label" || raw === "recordtitle") return "label";
+  if (["label", "recordtitle", "title", "documenttitle", "recordname"].includes(raw))
+    return "label";
   if (
     raw === "notes" ||
     raw === "additionalnotes" ||

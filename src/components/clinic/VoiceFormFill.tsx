@@ -8,6 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import type { DemoFormField, DemoFormFieldType } from "@/lib/demo/sample-transfer";
 import { extractVoiceFieldsWithAI } from "@/lib/demo/ai-form-validation.functions";
 import {
+  transcribeVoiceAudio,
+  type VoiceTranscriptionResult,
+} from "@/lib/demo/voice-transcription.functions";
+import {
   getFormDefinition,
   isProtectedField,
   resolveVoiceFieldId,
@@ -96,6 +100,40 @@ interface VoiceFormFillProps {
     transcript: string;
     currentValues: Record<string, string>;
   }) => Promise<VoiceExtractionResult>;
+  /** Test hook: replaces the server speech-to-text call. */
+  transcriber?: (input: {
+    formId: string;
+    audioBase64: string;
+    mimeType: string;
+  }) => Promise<VoiceTranscriptionResult>;
+}
+
+const MAX_RECORDING_MS = 60_000;
+const PROVIDER_NAMES = { elevenlabs: "ElevenLabs", groq: "Groq Whisper" } as const;
+
+function canRecordAudio() {
+  return (
+    typeof navigator !== "undefined" &&
+    Boolean(navigator.mediaDevices?.getUserMedia) &&
+    typeof MediaRecorder !== "undefined"
+  );
+}
+
+function preferredAudioType() {
+  const types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  return types.find((type) => MediaRecorder.isTypeSupported?.(type)) ?? "";
+}
+
+function blobToBase64(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read the recording"));
+    reader.readAsDataURL(blob);
+  });
 }
 
 interface SpeechSession {
@@ -482,6 +520,7 @@ function currentValueForTarget(
 }
 
 export function VoiceFormFill({
+  transcriber,
   formId,
   fields,
   notesLabel,
@@ -506,6 +545,9 @@ export function VoiceFormFill({
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
   const [applied, setApplied] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingTimerRef = useRef<number | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
   const transcriptId = useId();
   const targets = useMemo(() => createTargets(fields, notesLabel), [fields, notesLabel]);
   const example = targets
@@ -516,12 +558,20 @@ export function VoiceFormFill({
   useEffect(
     () => () => {
       recognitionRef.current?.abort();
+      const recorder = recorderRef.current;
+      if (recorder) {
+        recorder.onstop = null;
+        if (recorder.state !== "inactive") recorder.stop();
+        recorder.stream.getTracks().forEach((track) => track.stop());
+      }
+      if (recordingTimerRef.current) window.clearTimeout(recordingTimerRef.current);
     },
     [],
   );
 
   function openAssistant() {
-    setSpeechAvailable(Boolean(getSpeechRecognitionConstructor()));
+    setSpeechAvailable(canRecordAudio() || Boolean(getSpeechRecognitionConstructor()));
+    setTranscribing(false);
     setListening(false);
     setTranscript("");
     setMode(null);
@@ -623,6 +673,82 @@ export function VoiceFormFill({
     );
   }
 
+  async function transcribeRecording(audio: Blob) {
+    setTranscribing(true);
+    setModeMessage("Transcribing your recording…");
+    try {
+      const input = {
+        formId,
+        audioBase64: await blobToBase64(audio),
+        mimeType: audio.type || "audio/webm",
+      };
+      const result = await (transcriber ?? ((data) => transcribeVoiceAudio({ data })))(input);
+      if (!result.ok) {
+        setModeMessage("");
+        setRecognitionError(result.message);
+        return;
+      }
+      setTranscript(result.text);
+      setModeMessage(
+        `Transcribed by ${PROVIDER_NAMES[result.provider]}. Check the text, then review the fields below.`,
+      );
+      await reviewTranscript(result.text);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error("Voice transcription unavailable", error);
+      setModeMessage("");
+      setRecognitionError("Speech could not be transcribed. Try again, or type the transcript.");
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  async function startAudioRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = preferredAudioType();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        if (recordingTimerRef.current) window.clearTimeout(recordingTimerRef.current);
+        recorderRef.current = null;
+        setListening(false);
+        const audio = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
+        if (audio.size === 0) {
+          setRecognitionError("No audio was recorded. Check your microphone and try again.");
+          return;
+        }
+        void transcribeRecording(audio);
+      };
+      recorderRef.current = recorder;
+      recorder.start();
+      recordingTimerRef.current = window.setTimeout(() => {
+        if (recorder.state === "recording") recorder.stop();
+      }, MAX_RECORDING_MS);
+      setListening(true);
+      setModeMessage(
+        "Recording. Speak naturally, then press Stop. Audio is sent to a secure speech-to-text service.",
+      );
+    } catch (error) {
+      setListening(false);
+      const denied = error instanceof DOMException && error.name === "NotAllowedError";
+      if (!denied && getSpeechRecognitionConstructor()) {
+        startBrowserRecognition(
+          "Audio recording is unavailable. Switched to browser speech recognition.",
+        );
+        return;
+      }
+      setRecognitionError(
+        denied
+          ? "Microphone access was denied. Allow microphone access or type/paste a transcript."
+          : "Audio recording is unavailable. Type or paste a transcript instead.",
+      );
+    }
+  }
+
   function startVoiceRecognition() {
     setTranscript("");
     setProposals([]);
@@ -632,6 +758,11 @@ export function VoiceFormFill({
     setApplyMessage(null);
     setApplied(false);
     setRecognitionError(null);
+
+    if (canRecordAudio()) {
+      void startAudioRecording();
+      return;
+    }
 
     let localSession: SpeechSession | null = null;
     try {
@@ -647,6 +778,11 @@ export function VoiceFormFill({
   }
 
   function stopVoiceRecognition() {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state === "recording") {
+      recorder.stop();
+      return;
+    }
     const recognition = recognitionRef.current;
     if (!recognition) return;
     try {
@@ -661,9 +797,9 @@ export function VoiceFormFill({
     }
   }
 
-  async function reviewTranscript() {
-    if (!transcript.trim()) return;
-    const extracted = extractVoiceValues(transcript, targets);
+  async function reviewTranscript(text: string = transcript) {
+    if (!text.trim()) return;
+    const extracted = extractVoiceValues(text, targets);
     const localProposals = extracted.proposals;
     setProposals(localProposals);
     setIssues(extracted.issues);
@@ -676,7 +812,7 @@ export function VoiceFormFill({
       const runExtractor = extractor ?? ((input) => extractVoiceFieldsWithAI({ data: input }));
       const result = await runExtractor({
         formId,
-        transcript,
+        transcript: text,
         currentValues,
       });
       setAiExtractionMessage(result.message ?? null);
@@ -777,9 +913,15 @@ export function VoiceFormFill({
       return;
     }
     onApply(updates);
-    setApplied(true);
+    const waitingForTime = proposals.filter(isIncompleteDateTime);
+    // Keep the review open while a date still needs its time, so it can be applied next.
+    setApplied(waitingForTime.length === 0);
     setApplyMessage(
-      "Selected values were applied to the open form draft. Nothing has been saved or submitted.",
+      waitingForTime.length > 0
+        ? `Other values were applied. Add a time for ${waitingForTime
+            .map((proposal) => proposal.label)
+            .join(", ")} and press Apply again. Nothing has been saved or submitted.`
+        : "Selected values were applied to the open form draft. Nothing has been saved or submitted.",
     );
   }
 
@@ -821,10 +963,25 @@ export function VoiceFormFill({
     setApplied(false);
   }
 
-  const missingTime = proposals.some(isIncompleteDateTime);
-  const canApply =
-    !missingTime &&
-    proposals.some((proposal) => !hasConflict(proposal) || proposal.replaceExisting);
+  // After a review, list fields that are still empty and were not heard, so nothing is missed.
+  const reviewForm = getFormDefinition(formId);
+  const reviewed = aiExtractionMessage !== null && !aiExtractionLoading;
+  const stillEmpty = reviewed
+    ? targets.filter(
+        (target) =>
+          target.kind !== "notes" &&
+          !currentValueForTarget(target, currentValues, currentLabel, currentNotes).trim() &&
+          !proposals.some((proposal) => proposal.id === target.id && proposal.value.trim()),
+      )
+    : [];
+  const typeOnly = stillEmpty.filter(
+    (target) => target.kind === "field" && reviewForm && isProtectedField(target.key, reviewForm),
+  );
+  const sayOrType = stillEmpty.filter((target) => !typeOnly.includes(target));
+  const canApply = proposals.some(
+    (proposal) =>
+      !isIncompleteDateTime(proposal) && (!hasConflict(proposal) || proposal.replaceExisting),
+  );
 
   return (
     <section
@@ -845,8 +1002,8 @@ export function VoiceFormFill({
               ”.
             </p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              On-device en-US recognition is attempted first. Standard browser recognition may send
-              audio to an online service. Use synthetic test data only; do not speak patient
+              Your recording is transcribed by a server-side speech-to-text service (browser
+              recognition is the fallback). Use synthetic test data only; do not speak patient
               information.
             </p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -861,7 +1018,7 @@ export function VoiceFormFill({
           )}
           {modeMessage && (
             <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
-              {listening ? "Listening. Press Stop when finished. " : ""}
+              {listening && !recorderRef.current ? "Listening. Press Stop when finished. " : ""}
               {modeMessage}
             </p>
           )}
@@ -965,7 +1122,8 @@ export function VoiceFormFill({
                             </div>
                             {isIncompleteDateTime(proposal) && (
                               <p className="text-xs text-amber-700 dark:text-amber-400">
-                                Date heard, but no time. Enter the time to apply this field.
+                                Date heard, but no time. Other values can be applied now; add the
+                                time to apply this one.
                               </p>
                             )}
                           </div>
@@ -1018,6 +1176,27 @@ export function VoiceFormFill({
               </div>
             </div>
           )}
+          {stillEmpty.length > 0 && (
+            <div
+              role="status"
+              aria-label="Fields still empty"
+              className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+            >
+              <p className="font-medium">Still empty after this review:</p>
+              {sayOrType.length > 0 && (
+                <p className="mt-1">
+                  {sayOrType.map((target) => target.label).join(", ")}. Say them and review again,
+                  or type them in the form.
+                </p>
+              )}
+              {typeOnly.length > 0 && (
+                <p className="mt-1">
+                  {typeOnly.map((target) => target.label).join(", ")}. Type these in the form; voice
+                  does not fill protected fields.
+                </p>
+              )}
+            </div>
+          )}
           {issues.length > 0 && (
             <ul className="space-y-1 text-xs text-muted-foreground">
               {issues.map((issue) => (
@@ -1035,7 +1214,7 @@ export function VoiceFormFill({
               type="button"
               size="sm"
               className="rounded-full"
-              disabled={!speechAvailable || listening}
+              disabled={!speechAvailable || listening || transcribing}
               onClick={startVoiceRecognition}
             >
               <Mic aria-hidden="true" />
@@ -1057,8 +1236,8 @@ export function VoiceFormFill({
               size="sm"
               variant="outline"
               className="rounded-full"
-              disabled={!transcript.trim() || listening || aiExtractionLoading}
-              onClick={reviewTranscript}
+              disabled={!transcript.trim() || listening || transcribing || aiExtractionLoading}
+              onClick={() => void reviewTranscript()}
             >
               {aiExtractionLoading ? "Reviewing…" : "Review"}
             </Button>

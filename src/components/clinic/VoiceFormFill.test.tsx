@@ -166,14 +166,124 @@ describe("VoiceFormFill Groq extraction", () => {
     const dateLabel = "Proposed Acceptance record date and time date";
     await waitFor(() => expect(screen.getByLabelText(dateLabel)).toHaveValue("2026-11-21"));
     expect(screen.getByText(/Date heard, but no time/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    // A missing time does not block the other values.
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(applied).toEqual({ fields: {}, notes: "safe cryo" });
+    expect(screen.getByText(/Add a time for Acceptance record date and time/)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Proposed Acceptance record date and time time"), {
       target: { value: "14:30" },
     });
-    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
     expect(applied).toEqual({ fields: { acceptedAt: "2026-11-21T14:30" }, notes: "safe cryo" });
+  });
+  it("lists fields that are still empty after a review", async () => {
+    const form = getFormDefinition("CON-004")!;
+    render(
+      <VoiceFormFill
+        formId="CON-004"
+        fields={form.fields}
+        notesLabel="Additional Notes"
+        formTitle={form.title}
+        currentValues={Object.fromEntries(
+          form.fields.map((field) => [field.key, field.initialValue ?? ""]),
+        )}
+        currentLabel=""
+        currentNotes=""
+        onApply={() => {}}
+        extractor={async () => ({
+          enabled: true,
+          suggestions: [{ fieldId: "recordedAt", value: "2026-11-21", confidence: 0.95 }],
+          message: "AI suggestions are ready for review.",
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Fill by Voice" }));
+    fireEvent.change(screen.getByLabelText("Recognized transcript (or type/paste)"), {
+      target: { value: "record date is 21st November" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+
+    const notice = await screen.findByRole("status", { name: "Fields still empty" });
+    expect(notice).toHaveTextContent("Record Title. Say them and review again");
+    expect(notice).toHaveTextContent("Consent Version. Type these in the form");
+    expect(notice).not.toHaveTextContent("Record Date");
+    expect(notice).not.toHaveTextContent("Staff Member");
+  });
+});
+
+describe("VoiceFormFill server transcription", () => {
+  it("records audio, transcribes it on the server and reviews the fields", async () => {
+    class FakeRecorder {
+      static isTypeSupported = () => true;
+      state = "inactive";
+      mimeType = "audio/webm";
+      stream: { getTracks: () => { stop: () => void }[] };
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      constructor(stream: FakeRecorder["stream"]) {
+        this.stream = stream;
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        this.state = "inactive";
+        this.ondataavailable?.({ data: new Blob(["audio"], { type: "audio/webm" }) });
+        this.onstop?.();
+      }
+    }
+    const stream = { getTracks: () => [{ stop: () => {} }] };
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: async () => stream },
+    });
+    (globalThis as { MediaRecorder?: unknown }).MediaRecorder = FakeRecorder;
+
+    let sentType = "";
+    try {
+      render(
+        <VoiceFormFill
+          formId="CON-004"
+          fields={getFormDefinition("CON-004")!.fields}
+          notesLabel="Additional Notes"
+          formTitle="Storage consent"
+          currentValues={{ recordedAt: "" }}
+          currentLabel=""
+          currentNotes=""
+          onApply={() => {}}
+          transcriber={async (input) => {
+            sentType = input.mimeType;
+            return { ok: true, text: "record date is 21st November", provider: "groq" };
+          }}
+          extractor={async () => ({
+            enabled: true,
+            suggestions: [{ fieldId: "recordedAt", value: "2026-11-21", confidence: 0.95 }],
+            message: "AI suggestions are ready for review.",
+          })}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Fill by Voice" }));
+      fireEvent.click(screen.getByRole("button", { name: "Start" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled());
+      fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+      await waitFor(() =>
+        expect(screen.getByLabelText("Recognized transcript (or type/paste)")).toHaveValue(
+          "record date is 21st November",
+        ),
+      );
+      expect(sentType).toBe("audio/webm");
+      expect(screen.getByText(/Transcribed by Groq Whisper/)).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.getByLabelText("Proposed Record Date")).toHaveValue("2026-11-21"),
+      );
+    } finally {
+      delete (globalThis as { MediaRecorder?: unknown }).MediaRecorder;
+      delete (navigator as { mediaDevices?: unknown }).mediaDevices;
+    }
   });
 });
