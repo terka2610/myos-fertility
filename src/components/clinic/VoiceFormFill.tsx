@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { DemoFormField, DemoFormFieldType } from "@/lib/demo/sample-transfer";
+import { extractVoiceFieldsWithAI } from "@/lib/demo/ai-form-validation.functions";
+import {
+  getFormDefinition,
+  isProtectedField,
+  resolveVoiceFieldId,
+  type VoiceExtractionResult,
+} from "@/lib/demo/ai-form-validation";
 
 type RecognitionMode = "on-device" | "browser";
 type SpeechPart = "pickup-date" | "pickup-time";
@@ -61,13 +68,14 @@ interface VoiceProposal extends VoiceTarget {
   replaceExisting: boolean;
 }
 
-interface VoiceFormUpdates {
+export interface VoiceFormUpdates {
   fields: Record<string, string>;
   label?: string;
   notes?: string;
 }
 
 interface VoiceFormFillProps {
+  formId: string;
   fields: readonly DemoFormField[];
   notesLabel: string;
   formTitle: string;
@@ -75,6 +83,11 @@ interface VoiceFormFillProps {
   currentLabel: string;
   currentNotes: string;
   onApply: (updates: VoiceFormUpdates) => void;
+  extractor?: (input: {
+    formId: string;
+    transcript: string;
+    currentValues: Record<string, string>;
+  }) => Promise<VoiceExtractionResult>;
 }
 
 interface SpeechSession {
@@ -147,6 +160,11 @@ function escapeRegExp(value: string) {
 function createTargets(fields: readonly DemoFormField[], notesLabel: string): VoiceTarget[] {
   const fieldTargets = fields.map((field): VoiceTarget => {
     const aliases: SpeechAlias[] = [{ label: field.label }];
+    if (field.type === "date" || field.type === "datetime-local") {
+      if (/date/i.test(field.label)) {
+        aliases.push({ label: "Record Date" }, { label: "Record date" });
+      }
+    }
     if (field.key === "bookedAt") {
       aliases.push(
         { label: "Pickup date", part: "pickup-date" },
@@ -169,6 +187,10 @@ function createTargets(fields: readonly DemoFormField[], notesLabel: string): Vo
   const recordNotesAliases = [
     { label: notesLabel },
     { label: notesLabel === "Transport Notes" ? "Additional Notes" : "Transport Notes" },
+    { label: "Additional NERS" },
+    { label: "Additional Ners" },
+    { label: "Additional Notes" },
+    { label: "Additional note" },
   ];
 
   return [
@@ -248,6 +270,36 @@ function normalizeSpokenDate(value: string): string | null {
   const cleanValue = value.replace(/(\d)(st|nd|rd|th)\b/gi, "$1").trim();
   const monthNames = MONTHS.join("|");
   const monthAbbreviations = MONTHS.map((month) => month.slice(0, 3)).join("|");
+  const dubaiYear = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dubai",
+    year: "numeric",
+  }).format(new Date());
+  const monthFirstWithoutYear = new RegExp(
+    `^(${monthNames}|${monthAbbreviations})\\s+(\\d{1,2})$`,
+    "i",
+  ).exec(cleanValue);
+  const dayFirstWithoutYear = new RegExp(
+    `^(\\d{1,2})\\s+(${monthNames}|${monthAbbreviations})$`,
+    "i",
+  ).exec(cleanValue);
+  if (monthFirstWithoutYear) {
+    const year = Number(dubaiYear);
+    const month = MONTH_NUMBERS.get(monthFirstWithoutYear[1]!.toLowerCase())!;
+    const day = Number(monthFirstWithoutYear[2]);
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) {
+      return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+    }
+  }
+  if (dayFirstWithoutYear) {
+    const year = Number(dubaiYear);
+    const month = MONTH_NUMBERS.get(dayFirstWithoutYear[2]!.toLowerCase())!;
+    const day = Number(dayFirstWithoutYear[1]);
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) {
+      return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+    }
+  }
   const monthFirstMatch = new RegExp(
     `^(${monthNames}|${monthAbbreviations})\\s+(\\d{1,2}),?\\s+(\\d{4})$`,
     "i",
@@ -326,6 +378,7 @@ function normalizeVoiceValue(target: VoiceTarget, rawValue: string): string | nu
     return selectedOption ?? null;
   }
   if (target.type === "datetime-local") return normalizeSpokenDateTime(value);
+  if (target.type === "date") return normalizeSpokenDate(value);
   return value.length <= target.maxLength ? value : null;
 }
 
@@ -402,6 +455,7 @@ function extractVoiceValues(
 
 function exampleValue(target: VoiceTarget) {
   if (target.type === "datetime-local") return "November 25, 2026 at 2:30 PM";
+  if (target.type === "date") return "November 21";
   if (target.type === "select") return target.options?.[0] ?? "Matched";
   if (target.kind === "notes") return "synthetic notes";
   if (target.kind === "label") return "synthetic record";
@@ -420,6 +474,7 @@ function currentValueForTarget(
 }
 
 export function VoiceFormFill({
+  formId,
   fields,
   notesLabel,
   formTitle,
@@ -427,6 +482,7 @@ export function VoiceFormFill({
   currentLabel,
   currentNotes,
   onApply,
+  extractor,
 }: VoiceFormFillProps) {
   const [open, setOpen] = useState(false);
   const [speechAvailable, setSpeechAvailable] = useState(false);
@@ -437,6 +493,8 @@ export function VoiceFormFill({
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
   const [proposals, setProposals] = useState<VoiceProposal[]>([]);
   const [issues, setIssues] = useState<string[]>([]);
+  const [aiExtractionMessage, setAiExtractionMessage] = useState<string | null>(null);
+  const [aiExtractionLoading, setAiExtractionLoading] = useState(false);
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
   const [applied, setApplied] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -463,6 +521,8 @@ export function VoiceFormFill({
     setRecognitionError(null);
     setProposals([]);
     setIssues([]);
+    setAiExtractionMessage(null);
+    setAiExtractionLoading(false);
     setApplyMessage(null);
     setApplied(false);
     setOpen(true);
@@ -559,6 +619,8 @@ export function VoiceFormFill({
     setTranscript("");
     setProposals([]);
     setIssues([]);
+    setAiExtractionMessage(null);
+    setAiExtractionLoading(false);
     setApplyMessage(null);
     setApplied(false);
     setRecognitionError(null);
@@ -591,13 +653,77 @@ export function VoiceFormFill({
     }
   }
 
-  function reviewTranscript() {
+  async function reviewTranscript() {
     if (!transcript.trim()) return;
     const extracted = extractVoiceValues(transcript, targets);
-    setProposals(extracted.proposals);
+    const localProposals = extracted.proposals;
+    setProposals(localProposals);
     setIssues(extracted.issues);
     setApplied(false);
     setApplyMessage(null);
+    setAiExtractionMessage(null);
+    setAiExtractionLoading(true);
+
+    try {
+      const runExtractor = extractor ?? ((input) => extractVoiceFieldsWithAI({ data: input }));
+      const result = await runExtractor({
+        formId,
+        transcript,
+        currentValues,
+      });
+      setAiExtractionMessage(result.message ?? null);
+      if (!result.enabled) return;
+
+      const form = getFormDefinition(formId);
+      const resolvedSuggestions = result.suggestions.map((suggestion) => ({
+        ...suggestion,
+        fieldId: form
+          ? (resolveVoiceFieldId(suggestion.fieldId, form) ?? suggestion.fieldId)
+          : suggestion.fieldId,
+      }));
+      if (resolvedSuggestions.length === 0) {
+        setAiExtractionMessage(
+          "AI found no clear field matches. The original transcript and manual fields remain available.",
+        );
+      }
+      const aiProposals = resolvedSuggestions.flatMap((suggestion) => {
+        if (suggestion.confidence < 0.7) return [];
+        if (suggestion.fieldId === "label") {
+          const target = targets.find((candidate) => candidate.id === "label");
+          return target ? [{ ...target, value: suggestion.value, replaceExisting: false }] : [];
+        }
+        if (suggestion.fieldId === "notes") {
+          const target = targets.find((candidate) => candidate.id === "notes");
+          return target ? [{ ...target, value: suggestion.value, replaceExisting: false }] : [];
+        }
+        if (suggestion.fieldId === "handoff") return [];
+        const target = targets.find(
+          (candidate) => candidate.kind === "field" && candidate.key === suggestion.fieldId,
+        );
+        if (!target || (form && isProtectedField(target.key, form))) return [];
+        return [{ ...target, value: suggestion.value, replaceExisting: false }];
+      });
+
+      if (aiProposals.length > 0) {
+        // AI understands natural speech; the keyword parser captures everything up to the
+        // next spoken label, so its guesses must not override AI field assignments.
+        setProposals(aiProposals);
+        setIssues([]);
+      } else if (localProposals.length > 0) {
+        setAiExtractionMessage(
+          "AI found no clear field matches. Showing keyword-matched fallback values; check each one before applying.",
+        );
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("AI voice extraction unavailable", error);
+      }
+      setAiExtractionMessage(
+        "AI field extraction is unavailable. Use the manual review option below.",
+      );
+    } finally {
+      setAiExtractionLoading(false);
+    }
   }
 
   function updateProposal(
@@ -661,6 +787,8 @@ export function VoiceFormFill({
     setRecognitionError(null);
     setProposals([]);
     setIssues([]);
+    setAiExtractionMessage(null);
+    setAiExtractionLoading(false);
     setApplyMessage(null);
     setApplied(false);
   }
@@ -669,6 +797,8 @@ export function VoiceFormFill({
     setTranscript(value);
     setProposals([]);
     setIssues([]);
+    setAiExtractionMessage(null);
+    setAiExtractionLoading(false);
     setApplyMessage(null);
     setApplied(false);
   }
@@ -730,6 +860,19 @@ export function VoiceFormFill({
               placeholder="Recognized words or a pasted transcript will appear here."
             />
           </div>
+          {aiExtractionLoading && (
+            <p role="status" className="text-sm text-muted-foreground">
+              Reviewing field suggestions…
+            </p>
+          )}
+          {aiExtractionMessage && (
+            <p
+              role={/unavailable|failed/i.test(aiExtractionMessage) ? "alert" : "status"}
+              className="text-sm text-muted-foreground"
+            >
+              {aiExtractionMessage}
+            </p>
+          )}
           {proposals.length > 0 && (
             <div
               role="region"
@@ -858,10 +1001,10 @@ export function VoiceFormFill({
               size="sm"
               variant="outline"
               className="rounded-full"
-              disabled={!transcript.trim() || listening}
+              disabled={!transcript.trim() || listening || aiExtractionLoading}
               onClick={reviewTranscript}
             >
-              Review
+              {aiExtractionLoading ? "Reviewing…" : "Review"}
             </Button>
             <Button
               type="button"

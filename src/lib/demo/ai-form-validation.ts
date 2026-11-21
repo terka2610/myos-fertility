@@ -34,6 +34,59 @@ export const AI_VALIDATION_RESPONSE_SCHEMA = z.object({
 
 export type AIValidationResponse = z.infer<typeof AI_VALIDATION_RESPONSE_SCHEMA>;
 
+export const VOICE_EXTRACTION_RESPONSE_SCHEMA = z.object({
+  suggestions: z
+    .array(
+      z.object({
+        fieldId: z.string().min(1).max(200),
+        value: z.string().max(1000),
+        confidence: z.number().min(0).max(1),
+      }),
+    )
+    .max(30),
+});
+
+export type VoiceExtractionSuggestion = z.infer<
+  typeof VOICE_EXTRACTION_RESPONSE_SCHEMA
+>["suggestions"][number];
+
+export type VoiceExtractionResult = {
+  enabled: boolean;
+  suggestions: VoiceExtractionSuggestion[];
+  message?: string;
+};
+
+function normalizedFieldName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export function resolveVoiceFieldId(rawFieldId: string, form: DemoFormDefinition): string | null {
+  const raw = normalizedFieldName(rawFieldId);
+  for (const field of form.fields) {
+    const candidates = [
+      normalizedFieldName(field.key),
+      normalizedFieldName(field.label),
+      ...(field.type === "date" || field.type === "datetime-local"
+        ? ["recorddate", "recorddateandtime", "recordeddate"]
+        : []),
+    ];
+    if (candidates.includes(raw)) return field.key;
+  }
+
+  if (raw === "label" || raw === "recordtitle") return "label";
+  if (
+    raw === "notes" ||
+    raw === "additionalnotes" ||
+    raw === "additionalners" ||
+    raw === "additionalnurse" ||
+    raw === "additionalnerts"
+  ) {
+    return "notes";
+  }
+  if (raw === "transportroute" || raw === "handoff") return "handoff";
+  return null;
+}
+
 export const PROTECTED_FIELD_KEYS = [
   "sampleId",
   "patientAlias",

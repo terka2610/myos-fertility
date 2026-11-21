@@ -492,11 +492,11 @@ export function SampleTransferDemo() {
                                 variant="outline"
                                 size="sm"
                                 disabled={!hydrated}
-                                aria-label={`Open ${form.reference} ${form.title} Document Form`}
+                                aria-label={`Open ${form.reference} ${form.title}`}
                                 onClick={() => openForm(form)}
                               >
                                 <FileText aria-hidden="true" />
-                                Open Document Form
+                                Open
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -576,7 +576,17 @@ export function SampleTransferDemo() {
           {activeForm && activeRecord && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-2xl">Document Form</DialogTitle>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <DialogTitle className="text-2xl">{activeForm.title}</DialogTitle>
+                  {activeRecord.status === "complete" && (
+                    <Badge
+                      variant="outline"
+                      className="border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200"
+                    >
+                      Completed
+                    </Badge>
+                  )}
+                </div>
                 <DialogDescription>
                   {activeForm.reference}
                   {activeForm.direction && ` · ${activeForm.direction} transfer`}
@@ -598,6 +608,7 @@ export function SampleTransferDemo() {
                 </p>
               </div>
               <VoiceFormFill
+                formId={activeForm.id}
                 fields={activeForm.fields}
                 notesLabel={activeForm.id === "SHP-001" ? "Transport Notes" : "Additional Notes"}
                 formTitle={activeForm.title}
@@ -789,10 +800,10 @@ function GateRecordButton({
         size="sm"
         className="mt-4"
         disabled={disabled}
-        aria-label={`Open closure checkpoint ${form.reference} ${form.title} Document Form`}
+        aria-label={`Open closure checkpoint ${form.reference} ${form.title}`}
         onClick={onOpen}
       >
-        Open Document Form
+        Open
       </Button>
     </div>
   );

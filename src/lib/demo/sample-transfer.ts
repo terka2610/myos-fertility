@@ -8,7 +8,7 @@ export const SAMPLE_TRANSFER_HANDOFFS = [
 ] as const;
 
 export type DemoRecordStatus = "not-started" | "draft" | "complete";
-export type DemoFormFieldType = "text" | "datetime-local" | "select" | "textarea";
+export type DemoFormFieldType = "text" | "date" | "datetime-local" | "select" | "textarea";
 
 export interface DemoFormField {
   key: string;
@@ -49,6 +49,13 @@ const dateTime = (key: string, label: string): DemoFormField => ({
   key,
   label,
   type: "datetime-local",
+  required: true,
+});
+
+const date = (key: string, label: string): DemoFormField => ({
+  key,
+  label,
+  type: "date",
   required: true,
 });
 
@@ -93,7 +100,7 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
       text("consentVersion", "Consent Version", "Version reference"),
       text("sourceFacility", "Source Facility", FERTILITY_CENTRE_NAME, FERTILITY_CENTRE_NAME),
       text("destination", "Storage Destination", "Cryogenic Storage", "Cryogenic Storage"),
-      dateTime("recordedAt", "Record date and time"),
+      date("recordedAt", "Record Date"),
       staffMember(),
     ],
   },
@@ -109,7 +116,7 @@ export const SAMPLE_DOCUMENT_FORMS: readonly DemoFormDefinition[] = [
       text("consentVersion", "Consent Version", "Version reference"),
       text("sourceFacility", "Source Facility", FERTILITY_CENTRE_NAME, FERTILITY_CENTRE_NAME),
       text("destination", "Transfer Destination", "Cryo Transport", "Cryo Transport"),
-      dateTime("recordedAt", "Record date and time"),
+      date("recordedAt", "Record Date"),
       staffMember(),
     ],
   },

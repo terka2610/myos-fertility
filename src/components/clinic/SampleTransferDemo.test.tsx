@@ -59,7 +59,7 @@ describe("SampleTransferDemo", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Open SHP-001 Shipment booking Document Form",
+        name: "Open SHP-001 Shipment booking",
       }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Fill by Voice" }));
@@ -124,7 +124,7 @@ describe("SampleTransferDemo", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Open CLI-001 Patient registration Document Form",
+        name: "Open CLI-001 Patient registration",
       }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Fill by Voice" }));
@@ -144,15 +144,37 @@ describe("SampleTransferDemo", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
   });
 
+  it("resolves misheard notes and maps a spoken Record Date without using Additional Notes", () => {
+    render(<SampleTransferDemo />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open CON-004 Storage consent",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Fill by Voice" }));
+
+    fireEvent.change(screen.getByLabelText("Recognized transcript (or type/paste)"), {
+      target: {
+        value: "Record date 21st November, additional NERS shipped today",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+
+    const proposedValues = screen.getByRole("region", { name: "Proposed voice values" });
+    expect(within(proposedValues).getByLabelText("Proposed Record Date")).toHaveValue("2026-11-21");
+    expect(within(proposedValues).getByLabelText("Proposed Additional Notes")).toHaveValue(
+      "shipped today",
+    );
+  });
+
   it("offers voice filling for every document form using that form's fields", () => {
     render(<SampleTransferDemo />);
 
     for (const form of SAMPLE_DOCUMENT_FORMS) {
       fireEvent.click(
         screen.getByRole("button", {
-          name: new RegExp(
-            `Open ${form.reference} ${form.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} Document Form`,
-          ),
+          name: `Open ${form.reference} ${form.title}`,
         }),
       );
       fireEvent.click(screen.getByRole("button", { name: "Fill by Voice" }));
@@ -173,7 +195,7 @@ describe("SampleTransferDemo", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Open SHP-001 Shipment booking Document Form",
+        name: "Open SHP-001 Shipment booking",
       }),
     );
     fireEvent.click(screen.getByRole("button", { name: "Fill by Voice" }));
@@ -236,12 +258,12 @@ describe("SampleTransferDemo", () => {
 
     expect(
       screen.getByRole("button", {
-        name: "Open closure checkpoint SHP-016 Receiving facility acceptance Document Form",
+        name: "Open closure checkpoint SHP-016 Receiving facility acceptance",
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "Open closure checkpoint SHP-016 Receiving facility acceptance — return transfer Document Form",
+        name: "Open closure checkpoint SHP-016 Receiving facility acceptance — return transfer",
       }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("SHP-016")).toHaveLength(4);
@@ -345,7 +367,7 @@ describe("SampleTransferDemo", () => {
     render(<SampleTransferDemo />);
 
     const openForm = await screen.findByRole("button", {
-      name: "Open CLI-001 Patient registration Document Form",
+      name: "Open CLI-001 Patient registration",
     });
     await waitFor(() => expect(openForm).toBeEnabled());
     fireEvent.click(openForm);
@@ -355,7 +377,7 @@ describe("SampleTransferDemo", () => {
     fireEvent.change(screen.getByLabelText("Additional Notes"), {
       target: { value: "Sample metadata notes" },
     });
-    fireEvent.change(screen.getByLabelText(/^Patient/), {
+    fireEvent.change(screen.getByLabelText(/^Patient \*/), {
       target: { value: "Patient 02" },
     });
     fireEvent.change(screen.getByLabelText(/Registration date and time/), {
@@ -373,18 +395,62 @@ describe("SampleTransferDemo", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Open CLI-001 Patient registration Document Form",
+        name: "Open CLI-001 Patient registration",
       }),
     );
     expect(screen.getByLabelText("Record Title")).toHaveValue("Registration record 01");
     expect(screen.getByLabelText("Additional Notes")).toHaveValue("Sample metadata notes");
-    expect(screen.getByLabelText(/^Patient/)).toHaveValue("Patient 02");
+    expect(screen.getByLabelText(/^Patient \*/)).toHaveValue("Patient 02");
     fireEvent.click(screen.getByRole("button", { name: "Mark as Completed" }));
     expect(
       await screen.findByText("CLI-001 Patient registration: Marked as Completed"),
     ).toBeInTheDocument();
     expect(within(timeline).getByText("Completed")).toHaveClass("bg-emerald-50");
     expect(within(clinicRow).getByText("Done")).toHaveClass("bg-emerald-100");
+  });
+
+  it("uses the actual document title and preserves completion and entered values after remount", async () => {
+    const first = render(<SampleTransferDemo />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Open CLI-001 Patient registration",
+      }),
+    );
+    expect(screen.getByRole("heading", { name: "Patient registration" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Record Title"), {
+      target: { value: "Transfer consent record" },
+    });
+    fireEvent.change(screen.getByLabelText("Additional Notes"), {
+      target: { value: "Shipped today" },
+    });
+    fireEvent.change(screen.getByLabelText(/^Patient \*/), {
+      target: { value: "Patient 02" },
+    });
+    fireEvent.change(screen.getByLabelText(/Registration date and time/), {
+      target: { value: "2026-11-21T14:30" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Mark as Completed" }));
+    await waitFor(() =>
+      expect(
+        screen.getByText("CLI-001 Patient registration: Marked as Completed"),
+      ).toBeInTheDocument(),
+    );
+
+    first.unmount();
+    render(<SampleTransferDemo />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Open CLI-001 Patient registration",
+      }),
+    );
+    expect(screen.getByLabelText("Record Title")).toHaveValue("Transfer consent record");
+    expect(screen.getByLabelText("Additional Notes")).toHaveValue("Shipped today");
+    expect(screen.getByLabelText(/^Patient \*/)).toHaveValue("Patient 02");
+    expect(
+      within(screen.getByRole("dialog", { name: "Patient registration" })).getByText("Completed"),
+    ).toBeInTheDocument();
   });
 
   it("requires separate outbound and return acceptance and reconciliation records before closure", async () => {
@@ -402,7 +468,7 @@ describe("SampleTransferDemo", () => {
     ) {
       fireEvent.click(
         screen.getByRole("button", {
-          name: `Open closure checkpoint ${reference} ${title} Document Form`,
+          name: `Open closure checkpoint ${reference} ${title}`,
         }),
       );
       fireEvent.change(screen.getByLabelText(new RegExp(dateLabel)), {
@@ -518,7 +584,7 @@ describe("SampleTransferDemo", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Open CLI-001 Patient registration Document Form",
+        name: "Open CLI-001 Patient registration",
       }),
     );
     expect(screen.getByLabelText(/^Source Facility/)).toHaveValue("Fertility Centre");
@@ -527,7 +593,7 @@ describe("SampleTransferDemo", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Open closure checkpoint SHP-016 Receiving facility acceptance Document Form",
+        name: "Open closure checkpoint SHP-016 Receiving facility acceptance",
       }),
     );
     expect(screen.getByLabelText("Record Title")).toHaveValue("Legacy acceptance draft");

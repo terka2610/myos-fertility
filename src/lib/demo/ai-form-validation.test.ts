@@ -4,9 +4,33 @@ import {
   validateAIResponse,
   isProtectedField,
   getFormDefinition,
+  VOICE_EXTRACTION_RESPONSE_SCHEMA,
+  resolveVoiceFieldId,
 } from "./ai-form-validation";
 
 describe("AI form validation", () => {
+  it("resolves browser Groq labels to actual CON-004 field IDs", () => {
+    const form = getFormDefinition("CON-004")!;
+    expect(resolveVoiceFieldId("Record Date", form)).toBe("recordedAt");
+    expect(resolveVoiceFieldId("Additional NERS", form)).toBe("notes");
+    expect(resolveVoiceFieldId("Additional Notes", form)).toBe("notes");
+  });
+  it("strictly validates voice extraction suggestions", () => {
+    expect(
+      VOICE_EXTRACTION_RESPONSE_SCHEMA.parse({
+        suggestions: [
+          { fieldId: "label", value: "number one", confidence: 0.95 },
+          { fieldId: "notes", value: "shipped today", confidence: 0.88 },
+        ],
+      }).suggestions,
+    ).toHaveLength(2);
+
+    expect(() =>
+      VOICE_EXTRACTION_RESPONSE_SCHEMA.parse({
+        suggestions: [{ fieldId: "sampleId", value: "SMP-9999", confidence: 1.5 }],
+      }),
+    ).toThrow();
+  });
   it("runs strict required, date, option and identifier checks", () => {
     const form = getFormDefinition("SHP-017")!;
     const issues = runDeterministicValidation(form, {
