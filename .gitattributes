@@ -1,0 +1,4 @@
+# Scripts and Replit config must keep Linux line endings (Replit runs Linux).
+*.sh text eol=lf
+*.py text eol=lf
+.replit text eol=lf

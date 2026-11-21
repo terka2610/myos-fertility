@@ -23,4 +23,5 @@ trap 'kill "$GPS_PID" "$CRYO_PID" 2>/dev/null' EXIT INT TERM
   done
 ) &
 
-npm run dev
+# Listen on IPv4 too: Replit containers do not support the IPv6 "::" default.
+npm run dev -- --host 0.0.0.0
