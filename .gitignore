@@ -45,3 +45,7 @@ coverage/
 
 # Local files
 *.log
+# Seidu's Python services (local databases and caches)
+__pycache__/
+cryo/**/*.sqlite
+cryo/**/*.sqlite-journal
