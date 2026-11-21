@@ -178,8 +178,9 @@ describe("VoiceFormFill Groq extraction", () => {
 
     expect(applied).toEqual({ fields: { acceptedAt: "2026-11-21T14:30" }, notes: "safe cryo" });
   });
-  it("lists fields that are still empty after a review", async () => {
+  it("lists fields that are still empty and offers one-click suggestions", async () => {
     const form = getFormDefinition("CON-004")!;
+    let applied: VoiceFormUpdates | null = null;
     render(
       <VoiceFormFill
         formId="CON-004"
@@ -191,7 +192,9 @@ describe("VoiceFormFill Groq extraction", () => {
         )}
         currentLabel=""
         currentNotes=""
-        onApply={() => {}}
+        onApply={(updates) => {
+          applied = updates;
+        }}
         extractor={async () => ({
           enabled: true,
           suggestions: [{ fieldId: "recordedAt", value: "2026-11-21", confidence: 0.95 }],
@@ -207,10 +210,28 @@ describe("VoiceFormFill Groq extraction", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
 
     const notice = await screen.findByRole("status", { name: "Fields still empty" });
-    expect(notice).toHaveTextContent("Record Title. Say them and review again");
+    expect(notice).toHaveTextContent("Record Title");
+    expect(notice).toHaveTextContent("Say them and review again");
     expect(notice).toHaveTextContent("Consent Version. Type these in the form");
     expect(notice).not.toHaveTextContent("Record Date");
     expect(notice).not.toHaveTextContent("Staff Member");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Use suggestion for Record Title: Storage consent — SMP-0001",
+      }),
+    );
+    expect(screen.getByLabelText("Proposed Record Title")).toHaveValue(
+      "Storage consent — SMP-0001",
+    );
+    expect(screen.queryByRole("status", { name: "Fields still empty" })).toHaveTextContent(
+      "Consent Version",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    expect(applied).toEqual({
+      fields: { recordedAt: "2026-11-21" },
+      label: "Storage consent — SMP-0001",
+    });
   });
 });
 

@@ -508,6 +508,49 @@ function exampleValue(target: VoiceTarget) {
   return target.initialValue || "synthetic value";
 }
 
+function dubaiNowParts(now = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Dubai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(now)
+      .map((part) => [part.type, part.value]),
+  );
+  return {
+    date: `${parts["year"]}-${parts["month"]}-${parts["day"]}`,
+    time: `${parts["hour"]}:${parts["minute"]}`,
+  };
+}
+
+/** A safe one-click value for a blank field, or null when only the user can know it. */
+function suggestionForEmptyField(
+  target: Pick<VoiceTarget, "kind" | "type" | "initialValue">,
+  context: { formTitle: string; sampleId?: string | undefined; now?: Date },
+): { value: string; label: string } | null {
+  if (target.kind === "label") {
+    const title = context.sampleId
+      ? `${context.formTitle} — ${context.sampleId}`
+      : context.formTitle;
+    return { value: title, label: title };
+  }
+  if (target.kind !== "field") return null;
+  const now = dubaiNowParts(context.now);
+  if (target.type === "date") return { value: now.date, label: "Today" };
+  if (target.type === "datetime-local") {
+    return { value: `${now.date}T${now.time}`, label: `Now (${now.time})` };
+  }
+  if ((target.type === "text" || target.type === "textarea") && target.initialValue) {
+    return { value: target.initialValue, label: target.initialValue };
+  }
+  return null;
+}
+
 function currentValueForTarget(
   target: VoiceTarget,
   currentValues: Record<string, string>,
@@ -978,6 +1021,15 @@ export function VoiceFormFill({
     (target) => target.kind === "field" && reviewForm && isProtectedField(target.key, reviewForm),
   );
   const sayOrType = stillEmpty.filter((target) => !typeOnly.includes(target));
+
+  function addSuggestion(target: VoiceTarget, value: string) {
+    setProposals((previous) => [
+      ...previous.filter((proposal) => proposal.id !== target.id),
+      { ...target, value, replaceExisting: false },
+    ]);
+    setApplied(false);
+    setApplyMessage(null);
+  }
   const canApply = proposals.some(
     (proposal) =>
       !isIncompleteDateTime(proposal) && (!hasConflict(proposal) || proposal.replaceExisting),
@@ -1184,10 +1236,38 @@ export function VoiceFormFill({
             >
               <p className="font-medium">Still empty after this review:</p>
               {sayOrType.length > 0 && (
-                <p className="mt-1">
-                  {sayOrType.map((target) => target.label).join(", ")}. Say them and review again,
-                  or type them in the form.
-                </p>
+                <>
+                  <p className="mt-1">
+                    Say them and review again, type them in the form, or use a suggestion:
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {sayOrType.map((target) => {
+                      const suggestion = suggestionForEmptyField(target, {
+                        formTitle,
+                        sampleId: currentValues["sampleId"],
+                      });
+                      return (
+                        <li key={target.id} className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{target.label}</span>
+                          {suggestion ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 rounded-full bg-background text-xs"
+                              aria-label={`Use suggestion for ${target.label}: ${suggestion.label}`}
+                              onClick={() => addSuggestion(target, suggestion.value)}
+                            >
+                              Use “{suggestion.label}”
+                            </Button>
+                          ) : (
+                            <span className="text-xs">No suggestion — please say or type it.</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               )}
               {typeOnly.length > 0 && (
                 <p className="mt-1">
