@@ -22,9 +22,9 @@ ROOT = API_ROOT.parent
 DEFAULT_DB = ROOT / "data" / "cryo.sqlite"
 
 FACILITIES = [
-    ("CLINIC-A", "fertility_clinic", "Harbour IVF Clinic", "Abu Dhabi", "UAE", 24.4539, 54.3773),
-    ("CRYOPORT", "courier", "Cryoport courier", "Abu Dhabi", "UAE", 24.7600, 54.7000),
-    ("CRYONEXT", "storage", "CryoNext storage", "Dubai", "UAE", 25.2048, 55.2708),
+    ("CLINIC-A", "fertility_clinic", "NYU Abu Dhabi", "Abu Dhabi", "UAE", 24.5240, 54.4347),
+    ("CRYOPORT", "courier", "Cryoport courier", "Abu Dhabi", "UAE", 24.4785, 54.5264),
+    ("CRYONEXT", "storage", "MBZUAI", "Abu Dhabi", "UAE", 24.4338, 54.6182),
 ]
 
 SAMPLES = [
@@ -34,25 +34,25 @@ SAMPLES = [
 ]
 
 EVENTS = [
-    ("SMP-0001", "CLINIC-A", "collected", "Eight oocytes frozen at Clinic A.", "2026-11-19T06:00:00Z"),
+    ("SMP-0001", "CLINIC-A", "collected", "Eight oocytes frozen at NYU Abu Dhabi.", "2026-11-19T06:00:00Z"),
     ("SMP-0001", "CLINIC-A", "consent_recorded", "Transfer consent is on file.", "2026-11-19T06:40:00Z"),
     ("SMP-0001", "CLINIC-A", "released", "Handed to the courier.", "2026-11-19T07:10:00Z"),
-    ("SMP-0001", "CRYOPORT", "in_transit", "En route to CryoNext storage.", "2026-11-19T08:00:00Z"),
-    ("SMP-0002", "CLINIC-A", "collected", "Twelve oocytes frozen at Clinic A.", "2021-06-01T08:00:00Z"),
-    ("SMP-0002", "CRYONEXT", "arrived_storage", "Received at CryoNext.", "2021-06-01T15:00:00Z"),
+    ("SMP-0001", "CRYOPORT", "in_transit", "En route to MBZUAI.", "2026-11-19T08:00:00Z"),
+    ("SMP-0002", "CLINIC-A", "collected", "Twelve oocytes frozen at NYU Abu Dhabi.", "2021-06-01T08:00:00Z"),
+    ("SMP-0002", "CRYONEXT", "arrived_storage", "Received at MBZUAI.", "2021-06-01T15:00:00Z"),
     ("SMP-0002", "CRYONEXT", "stored", "In monitored storage.", "2021-06-01T16:00:00Z"),
     ("SMP-0003", "CRYONEXT", "stored", "Held in storage since 2019.", "2019-03-14T10:00:00Z"),
     ("SMP-0003", "CRYONEXT", "release_requested", "Patient asked to use the eggs.", "2026-11-18T09:00:00Z"),
-    ("SMP-0003", "CRYOPORT", "in_transit_return", "Returning to Clinic A.", "2026-11-19T09:30:00Z"),
+    ("SMP-0003", "CRYOPORT", "in_transit_return", "Returning to NYU Abu Dhabi.", "2026-11-19T09:30:00Z"),
 ]
 
 ROUTE = [
-    ("SMP-0001", 24.4539, 54.3773, "2026-11-19T07:10:00Z"),
-    ("SMP-0001", 24.6200, 54.5200, "2026-11-19T07:40:00Z"),
-    ("SMP-0001", 24.7600, 54.7000, "2026-11-19T08:10:00Z"),
-    ("SMP-0003", 25.2048, 55.2708, "2026-11-19T09:30:00Z"),
-    ("SMP-0003", 25.0200, 55.0500, "2026-11-19T10:10:00Z"),
-    ("SMP-0003", 24.8200, 54.7800, "2026-11-19T10:40:00Z"),
+    ("SMP-0001", 24.5240, 54.4347, "2026-11-19T07:10:00Z"),
+    ("SMP-0001", 24.4785, 54.5264, "2026-11-19T07:40:00Z"),
+    ("SMP-0001", 24.4520, 54.5750, "2026-11-19T08:10:00Z"),
+    ("SMP-0003", 24.4338, 54.6182, "2026-11-19T09:30:00Z"),
+    ("SMP-0003", 24.4700, 54.5400, "2026-11-19T10:10:00Z"),
+    ("SMP-0003", 24.5050, 54.4800, "2026-11-19T10:40:00Z"),
 ]
 
 

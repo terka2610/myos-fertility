@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Post a synthetic courier leg so the map is populated before a phone is attached.
 
-The Dubai coordinates are a demo drawing, not a real shipment. The specimen
+The coordinates are a demo drawing from NYU Abu Dhabi to MBZUAI, not a real shipment. The specimen
 shipper is offset a short distance from the van so both traces stay visible.
 Phone and shipper use the OwnTracks JSON publish. The van uses the same
 query string Traccar Client appends to its server URL.
@@ -20,21 +20,21 @@ import urllib.request
 from datetime import datetime, timezone
 
 VEHICLE_WAYPOINTS = [
-    (25.2280, 55.2890),
-    (25.2100, 55.2800),
-    (25.1900, 55.2650),
-    (25.1700, 55.2450),
-    (25.1500, 55.2300),
+    (24.5240, 54.4347),
+    (24.5000, 54.4800),
+    (24.4785, 54.5264),
+    (24.4520, 54.5750),
+    (24.4338, 54.6182),
 ]
 
 PHONE_WAYPOINTS = [
-    (25.2280, 55.2890),
-    (25.2284, 55.2896),
-    (25.2288, 55.2902),
-    (25.2283, 55.2908),
-    (25.2278, 55.2902),
-    (25.2276, 55.2894),
-    (25.2280, 55.2890),
+    (24.5240, 54.4347),
+    (24.5244, 54.4353),
+    (24.5248, 54.4359),
+    (24.5243, 54.4365),
+    (24.5238, 54.4359),
+    (24.5236, 54.4351),
+    (24.5240, 54.4347),
 ]
 
 

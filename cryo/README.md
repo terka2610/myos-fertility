@@ -1,6 +1,6 @@
 # Cryo sample API and simulated chat
 
-`SMP-0001` is cryo id `CRYO-1700`: eight oocytes that left Harbour IVF and are still with the courier, on the way to CryoNext storage.
+`SMP-0001` is cryo id `CRYO-1700`: eight oocytes that left NYU Abu Dhabi and are still with the courier, on the way to MBZUAI.
 
 The MYOS tables already live in `artifacts/myos-fertility/drizzle/migrations`. In the Supabase SQL editor, run `sql/schema.sql`, then `sql/seed.sql`. To wipe the cryo rows, run `sql/reset.sql` and then `sql/seed.sql` again.
 

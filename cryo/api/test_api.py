@@ -56,7 +56,7 @@ def main() -> None:
                 "collected", "consent_recorded", "released", "in_transit"
             ], "custody chain mismatch")
             must(len(sample["route"]) == 3, "GPS route missing")
-            must(sample["route"][0]["lat"] == 24.4539, "route should start at Clinic A")
+            must(sample["route"][0]["lat"] == 24.5240, "route should start at NYU Abu Dhabi")
 
             status, listed = request(f"{base}/api/samples")
             ids = [item["public_id"] for item in listed["samples"]]

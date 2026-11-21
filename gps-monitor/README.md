@@ -30,7 +30,7 @@ python3 test_monitor.py
 
 Open http://127.0.0.1:8787
 
-`simulate.py` loads a synthetic Dubai courier leg: a van, a specimen shipper offset beside it so both lines stay visible, and a short walk for the operator phone. `simulate.py --live` plays that route one step per second.
+`simulate.py` loads a synthetic NYU Abu Dhabi to MBZUAI courier leg: a van, a specimen shipper offset beside it so both lines stay visible, and a short walk for the operator phone. `simulate.py --live` plays that route one step per second.
 
 `test_monitor.py` checks OwnTracks, OsmAnd, a form post, and Traccar Client JSON. It also checks that a person-style device id is rejected and that sample identity strings never land in the database file or the API.
 
