@@ -10,6 +10,8 @@ export interface JourneyLocationInput {
   lat: number;
   lon: number;
   recordedAt: string;
+  /** Speed reported by the GPS device, if any. */
+  speedKmh?: number | null;
 }
 
 export interface JourneyCustodyEventInput {
@@ -26,7 +28,7 @@ export interface JourneyMetricsInput {
   custodyEvents: readonly JourneyCustodyEventInput[];
   /** Destination of the current leg, if known. Needed for any ETA. */
   destination?: { lat: number; lon: number } | null;
-  /** A fix older than this is stale. Default 5 minutes until agreed with the GPS owner. */
+  /** A fix older than this is stale. Default 5 minutes, agreed with the GPS owner. */
   staleAfterSeconds?: number;
 }
 
@@ -48,6 +50,8 @@ export interface JourneyMetrics {
   inTransportFreezerMinutes: number | null;
   etaAt: string | null;
   etaMethod: EtaMethod;
+  /** A factual reason the shipment may be delayed (stale GPS, stationary vehicle), or null. */
+  delayReason: string | null;
   /** Traffic is only reported when a real provider supplies it; none is connected. */
   traffic: null;
   notices: string[];
@@ -73,13 +77,10 @@ const LEG_STEPS: Record<JourneyLeg, { pickup: readonly string[]; arrival: readon
   return: { pickup: ["in_transit_return"], arrival: ["received", "verified"] },
 };
 
-// Placeholder names until the GPS/custody owner confirms the real freezer event steps.
-const FREEZER_LOADED_STEPS = new Set(["freezer_loaded", "loaded_transport_freezer"]);
-const FREEZER_UNLOADED_STEPS = new Set(["freezer_unloaded", "unloaded_transport_freezer"]);
-
 const DEFAULT_STALE_AFTER_SECONDS = 5 * 60;
 const FUTURE_TOLERANCE_MS = 60 * 1000;
 const ETA_SPEED_WINDOW_MS = 30 * 60 * 1000;
+const STATIONARY_KMH = 3;
 const MIN_PLAUSIBLE_KMH = 15;
 const MAX_PLAUSIBLE_KMH = 150;
 // Straight-line distance underestimates road distance; scale up for an approximate estimate.
@@ -180,18 +181,11 @@ export function deriveJourneyMetrics(input: JourneyMetricsInput): JourneyMetrics
     ? minutesBetween(pickup.time, arrivedAfterPickup?.time ?? nowMs)
     : null;
 
-  // Time in transport freezer needs an explicit loading event; never inferred from transit time.
-  const loaded = legEvents.find((entry) => FREEZER_LOADED_STEPS.has(entry.event.step)) ?? null;
-  const unloaded = loaded
-    ? (legEvents.find(
-        (entry) => FREEZER_UNLOADED_STEPS.has(entry.event.step) && entry.time >= loaded.time,
-      ) ?? null)
-    : null;
-  const inTransportFreezerMinutes = loaded
-    ? minutesBetween(loaded.time, unloaded?.time ?? nowMs)
-    : null;
-  if (pickup && !loaded)
-    notices.push("Time in transport freezer unknown: no loading event recorded.");
+  // Agreed with the custody data owner: the transport freezer period starts at pickup
+  // (released / in_transit) and ends at arrival (arrived_storage; received on the return leg).
+  const loaded = pickup;
+  const unloaded = arrivedAfterPickup;
+  const inTransportFreezerMinutes = transportMinutes;
 
   // ETA: only an approximate distance/speed estimate from recent, fresh, plausible movement.
   let etaAt: string | null = null;
@@ -199,11 +193,17 @@ export function deriveJourneyMetrics(input: JourneyMetricsInput): JourneyMetrics
   if (arrivedAfterPickup) {
     etaMethod = "arrived";
   } else if (pickup && last && !locationStale && input.destination) {
+    // Prefer the speed the GPS device reports; otherwise derive it from recent movement.
+    const reportedSpeed = last.point.speedKmh;
     const recent = locations.filter((entry) => entry.time >= last.time - ETA_SPEED_WINDOW_MS);
     const first = recent[0]!;
     const hours = (last.time - first.time) / 3600000;
-    const travelledKm = distanceKm(first.point, last.point);
-    const speedKmh = hours > 0 ? travelledKm / hours : 0;
+    const speedKmh =
+      typeof reportedSpeed === "number" && Number.isFinite(reportedSpeed)
+        ? reportedSpeed
+        : hours > 0
+          ? distanceKm(first.point, last.point) / hours
+          : 0;
     if (
       isValidCoordinate(input.destination.lat, input.destination.lon) &&
       speedKmh >= MIN_PLAUSIBLE_KMH &&
@@ -212,12 +212,22 @@ export function deriveJourneyMetrics(input: JourneyMetricsInput): JourneyMetrics
       const remainingKm = distanceKm(last.point, input.destination) * ROAD_DISTANCE_FACTOR;
       etaAt = new Date(last.time + (remainingKm / speedKmh) * 3600000).toISOString();
       etaMethod = "distance_speed_estimate";
-      notices.push("ETA is approximate (distance and recent speed); no routing provider.");
+      notices.push("ETA is approximate (distance and current speed); no routing provider.");
     } else {
       notices.push("ETA unavailable: not enough recent movement to estimate.");
     }
   } else if (pickup && !arrivedAfterPickup) {
     notices.push("ETA unavailable: needs a fresh location and a known destination.");
+  }
+
+  // Delay reasons are only stated from facts we hold; no traffic provider is connected.
+  let delayReason: string | null = null;
+  if (pickup && !arrivedAfterPickup && last) {
+    if (locationStale) {
+      delayReason = `GPS signal lost: last update ${Math.round(locationAgeSeconds! / 60)} min ago`;
+    } else if (typeof last.point.speedKmh === "number" && last.point.speedKmh < STATIONARY_KMH) {
+      delayReason = "Vehicle stationary";
+    }
   }
 
   return {
@@ -238,6 +248,7 @@ export function deriveJourneyMetrics(input: JourneyMetricsInput): JourneyMetrics
     inTransportFreezerMinutes,
     etaAt,
     etaMethod,
+    delayReason,
     traffic: null,
     notices,
   };
@@ -268,5 +279,29 @@ export function journeyInputFromSupabaseRows(params: {
         ? [{ step: row["step"], recordedAt: row["recorded_at"] }]
         : [],
     ),
+  };
+}
+
+/** Row written to the database for the WhatsApp agent. Field names agreed with the agent owner. */
+export interface JourneyMetricsRecord {
+  sample_id: string;
+  eta: string | null;
+  minutes_in_freezer: number | null;
+  delay_reason: string | null;
+  lat: number | null;
+  lon: number | null;
+  /** Time of the GPS fix that lat/lon come from. */
+  recorded_at: string | null;
+}
+
+export function toJourneyMetricsRecord(metrics: JourneyMetrics): JourneyMetricsRecord {
+  return {
+    sample_id: metrics.sampleId,
+    eta: metrics.etaAt,
+    minutes_in_freezer: metrics.inTransportFreezerMinutes,
+    delay_reason: metrics.delayReason,
+    lat: metrics.lastLocation?.lat ?? null,
+    lon: metrics.lastLocation?.lon ?? null,
+    recorded_at: metrics.lastLocation?.recordedAt ?? null,
   };
 }

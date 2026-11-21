@@ -12,6 +12,13 @@ import { JourneyRouteReplay } from "@/components/clinic/JourneyRouteReplay";
 import type { JourneyRoutePoint } from "@/lib/samples/types";
 import { useAuth } from "@/hooks/useAuth";
 import { JourneyMetricsPanel } from "@/components/clinic/JourneyMetricsPanel";
+import { LiveVehicleCard } from "@/components/clinic/LiveVehicleCard";
+import {
+  readVehicleFix,
+  refreshJourneyMetrics,
+  type JourneyMetricsRefresh,
+} from "@/lib/samples/journey-metrics.functions";
+import type { VehicleFixResult } from "@/lib/samples/gps-monitor";
 import {
   deriveJourneyMetrics,
   journeyInputFromSupabaseRows,
@@ -152,11 +159,58 @@ function JourneyCalendar() {
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
     setNow(new Date());
-    const timer = window.setInterval(() => setNow(new Date()), 30000);
+    const timer = window.setInterval(() => setNow(new Date()), 15000);
     return () => window.clearInterval(timer);
   }, []);
+
+  // Courier GPS from the monitor; refreshed with the clock. Vehicle data only.
+  const [vehicleFix, setVehicleFix] = useState<VehicleFixResult | null>(null);
+  useEffect(() => {
+    if (!now) return;
+    let cancelled = false;
+    void readVehicleFix({ data: { sampleId } })
+      .then((result) => {
+        if (!cancelled) setVehicleFix(result);
+      })
+      .catch(() => {
+        if (!cancelled) setVehicleFix({ ok: false, reason: "unreachable" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [now, sampleId]);
+
+  // Signed in with live custody data: compute on the server and save for the WhatsApp agent.
+  const [refreshed, setRefreshed] = useState<JourneyMetricsRefresh | null>(null);
+  const canRefresh = Boolean(session) && live.connected;
+  const refreshTick = now ? Math.floor(now.getTime() / 30000) : 0;
+  useEffect(() => {
+    if (!canRefresh) {
+      setRefreshed(null);
+      return;
+    }
+    let cancelled = false;
+    void refreshJourneyMetrics({ data: { sampleId } })
+      .then((result) => {
+        if (!cancelled) setRefreshed(result);
+      })
+      .catch((error) => {
+        if (import.meta.env.DEV) console.warn("Journey metrics refresh unavailable", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canRefresh, refreshTick, sampleId]);
+
   const journeyMetrics = useMemo(() => {
     if (!live.connected) return simulatedJourneyMetrics(synthetic);
+    if (refreshed?.connected) {
+      return {
+        asOf: undefined,
+        metrics: refreshed.metrics,
+        saveStatus: { saved: refreshed.saved, error: refreshed.saveError },
+      };
+    }
     if (!now) return null;
     return {
       asOf: undefined,
@@ -169,7 +223,7 @@ function JourneyCalendar() {
         }),
       ),
     };
-  }, [live, now, sampleId, synthetic]);
+  }, [live, now, refreshed, sampleId, synthetic]);
   const syntheticSample =
     SYNTHETIC_SAMPLE_RECORDS.find((record) => record.displayId === sampleId) ??
     SYNTHETIC_SAMPLE_RECORDS[0]!;
@@ -341,8 +395,13 @@ function JourneyCalendar() {
         </section>
 
         {journeyMetrics && (
-          <JourneyMetricsPanel metrics={journeyMetrics.metrics} asOf={journeyMetrics.asOf} />
+          <JourneyMetricsPanel
+            metrics={journeyMetrics.metrics}
+            asOf={journeyMetrics.asOf}
+            saveStatus={"saveStatus" in journeyMetrics ? journeyMetrics.saveStatus : undefined}
+          />
         )}
+        {!live.connected && vehicleFix && now && <LiveVehicleCard result={vehicleFix} now={now} />}
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <Card className="rounded-[1.5rem] border-0 bg-card shadow-soft">

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { deriveJourneyMetrics, journeyInputFromSupabaseRows } from "./journey-metrics";
+import {
+  deriveJourneyMetrics,
+  journeyInputFromSupabaseRows,
+  toJourneyMetricsRecord,
+} from "./journey-metrics";
 
 const NOW = new Date("2026-11-21T10:00:00Z");
 const STORAGE = { lat: 25.2048, lon: 55.2708 };
@@ -132,31 +136,96 @@ describe("deriveJourneyMetrics", () => {
     expect(metrics.notices).toContain("Simulated data: not a live shipment.");
   });
 
-  it("only reports time in transport freezer when a loading event exists", () => {
-    const withoutLoading = deriveJourneyMetrics({
+  it("counts freezer time from pickup until arrival", () => {
+    const inTransit = deriveJourneyMetrics({
       sampleId: "SMP-0001",
       now: NOW,
       source: "live_vehicle",
       locations: [],
       custodyEvents: outboundEvents,
     });
-    expect(withoutLoading.inTransportFreezerMinutes).toBeNull();
-    expect(withoutLoading.notices).toContain(
-      "Time in transport freezer unknown: no loading event recorded.",
-    );
+    expect(inTransit.freezerLoadedAt).toBe("2026-11-21T09:00:00.000Z");
+    expect(inTransit.inTransportFreezerMinutes).toBe(60);
 
-    const withLoading = deriveJourneyMetrics({
+    const arrived = deriveJourneyMetrics({
       sampleId: "SMP-0001",
       now: NOW,
       source: "live_vehicle",
       locations: [],
       custodyEvents: [
         ...outboundEvents,
-        { step: "freezer_loaded", recordedAt: "2026-11-21T09:10:00Z" },
+        { step: "arrived_storage", recordedAt: "2026-11-21T09:40:00Z" },
       ],
     });
-    expect(withLoading.freezerLoadedAt).toBe("2026-11-21T09:10:00.000Z");
-    expect(withLoading.inTransportFreezerMinutes).toBe(50);
+    expect(arrived.freezerUnloadedAt).toBe("2026-11-21T09:40:00.000Z");
+    expect(arrived.inTransportFreezerMinutes).toBe(40);
+
+    const notPickedUp = deriveJourneyMetrics({
+      sampleId: "SMP-0001",
+      now: NOW,
+      source: "live_vehicle",
+      locations: [],
+      custodyEvents: [{ step: "collected", recordedAt: "2026-11-21T06:00:00Z" }],
+    });
+    expect(notPickedUp.inTransportFreezerMinutes).toBeNull();
+  });
+
+  it("uses the device-reported speed for ETA and reports factual delay reasons", () => {
+    const moving = deriveJourneyMetrics({
+      sampleId: "SMP-0001",
+      now: NOW,
+      source: "live_vehicle",
+      custodyEvents: outboundEvents,
+      destination: { lat: 24.452, lon: 54.975 },
+      locations: [{ lat: 24.452, lon: 54.575, recordedAt: "2026-11-21T09:59:00Z", speedKmh: 48 }],
+    });
+    expect(moving.etaMethod).toBe("distance_speed_estimate");
+    // ~40.5 km straight line x 1.3 road factor at 48 km/h is about 66 minutes after the fix.
+    const minutes = (Date.parse(moving.etaAt!) - Date.parse("2026-11-21T09:59:00Z")) / 60000;
+    expect(minutes).toBeGreaterThan(60);
+    expect(minutes).toBeLessThan(72);
+    expect(moving.delayReason).toBeNull();
+
+    const stopped = deriveJourneyMetrics({
+      sampleId: "SMP-0001",
+      now: NOW,
+      source: "live_vehicle",
+      custodyEvents: outboundEvents,
+      destination: { lat: 24.452, lon: 54.975 },
+      locations: [{ lat: 24.452, lon: 54.575, recordedAt: "2026-11-21T09:59:00Z", speedKmh: 0 }],
+    });
+    expect(stopped.etaAt).toBeNull();
+    expect(stopped.delayReason).toBe("Vehicle stationary");
+
+    const lost = deriveJourneyMetrics({
+      sampleId: "SMP-0001",
+      now: NOW,
+      source: "live_vehicle",
+      custodyEvents: outboundEvents,
+      locations: [{ lat: 24.452, lon: 54.575, recordedAt: "2026-11-21T09:30:00Z", speedKmh: 48 }],
+    });
+    expect(lost.lastLocation?.lat).toBe(24.452);
+    expect(lost.locationStale).toBe(true);
+    expect(lost.delayReason).toBe("GPS signal lost: last update 30 min ago");
+  });
+
+  it("maps metrics to the agreed WhatsApp record fields", () => {
+    const metrics = deriveJourneyMetrics({
+      sampleId: "SMP-0001",
+      now: NOW,
+      source: "live_vehicle",
+      custodyEvents: outboundEvents,
+      locations: [{ lat: 24.452, lon: 54.575, recordedAt: "2026-11-21T09:59:00Z", speedKmh: 48 }],
+    });
+    expect(toJourneyMetricsRecord(metrics)).toEqual({
+      sample_id: "SMP-0001",
+      eta: null,
+      minutes_in_freezer: 60,
+      delay_reason: null,
+      lat: 24.452,
+      lon: 54.575,
+      recorded_at: "2026-11-21T09:59:00.000Z",
+    });
   });
 
   it("gives an approximate ETA only from fresh, plausible movement", () => {
@@ -176,7 +245,7 @@ describe("deriveJourneyMetrics", () => {
     expect(metrics.etaAt).not.toBeNull();
     expect(Date.parse(metrics.etaAt!)).toBeGreaterThan(NOW.getTime());
     expect(metrics.notices).toContain(
-      "ETA is approximate (distance and recent speed); no routing provider.",
+      "ETA is approximate (distance and current speed); no routing provider.",
     );
 
     const parked = deriveJourneyMetrics({

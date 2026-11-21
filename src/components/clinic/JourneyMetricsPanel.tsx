@@ -57,10 +57,13 @@ function Metric({
 export function JourneyMetricsPanel({
   metrics,
   asOf,
+  saveStatus,
 }: {
   metrics: JourneyMetrics;
   /** For simulations: the simulated moment the metrics describe. */
   asOf?: string | undefined;
+  /** Whether the latest numbers were written for the WhatsApp agent. */
+  saveStatus?: { saved: boolean; error: string | null } | undefined;
 }) {
   const location = metrics.lastLocation;
   const locationTime = location ? formatSampleTimestamp(location.recordedAt).text : undefined;
@@ -128,8 +131,8 @@ export function JourneyMetricsPanel({
           />
           <Metric
             label="Time in transport freezer"
-            value={freezer ?? "Unknown"}
-            detail={freezer ? undefined : "Needs a freezer loading event"}
+            value={freezer ?? "Not loaded yet"}
+            detail={freezer ? "From pickup until arrival" : undefined}
             tone={freezer ? "default" : "muted"}
           />
           <Metric
@@ -137,10 +140,15 @@ export function JourneyMetricsPanel({
             value={metrics.etaMethod === "arrived" ? "Arrived" : (eta ?? "ETA unavailable")}
             detail={
               metrics.etaMethod === "distance_speed_estimate"
-                ? "Approximate: distance and recent speed"
+                ? "Approximate: distance and current speed"
                 : undefined
             }
             tone={metrics.etaMethod === "unavailable" ? "muted" : "default"}
+          />
+          <Metric
+            label="Delay"
+            value={metrics.delayReason ?? "No delay reported"}
+            tone={metrics.delayReason ? "warning" : "muted"}
           />
           <Metric
             label="Traffic"
@@ -149,6 +157,13 @@ export function JourneyMetricsPanel({
             tone="muted"
           />
         </dl>
+        {saveStatus && (
+          <p className="text-xs text-muted-foreground">
+            {saveStatus.saved
+              ? "Saved for the WhatsApp agent."
+              : `Not saved for the WhatsApp agent: ${saveStatus.error ?? "unknown error"}`}
+          </p>
+        )}
         {metrics.notices.length > 0 && (
           <ul aria-label="Journey data notices" className="space-y-1 text-xs text-muted-foreground">
             {metrics.notices.map((notice) => (
