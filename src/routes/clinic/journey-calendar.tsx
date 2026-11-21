@@ -15,10 +15,12 @@ import { JourneyMetricsPanel } from "@/components/clinic/JourneyMetricsPanel";
 import { LiveVehicleCard } from "@/components/clinic/LiveVehicleCard";
 import {
   readVehicleFix,
+  readJourneyMetrics,
   refreshJourneyMetrics,
   type JourneyMetricsRefresh,
 } from "@/lib/samples/journey-metrics.functions";
 import type { VehicleFixResult } from "@/lib/samples/gps-monitor";
+import { milestonesFromCustody } from "@/lib/samples/journey-milestones";
 import {
   deriveJourneyMetrics,
   journeyInputFromSupabaseRows,
@@ -78,12 +80,10 @@ export const Route = createFileRoute("/clinic/journey-calendar")({
       sampleId: ["SMP-0001", "SMP-0002", "SMP-0003"].includes(sampleId) ? sampleId : "SMP-0001",
     };
   },
-  loader: async ({
-    location,
-  }): Promise<SupabaseJourneyResponse & { requestedSampleId: string }> => {
-    const search = (location.search ?? {}) as Record<string, unknown>;
-    const requestedSampleId =
-      typeof search["sampleId"] === "string" ? search["sampleId"] : "SMP-0001";
+  // Reload the journey whenever the selected sample changes.
+  loaderDeps: ({ search }) => ({ sampleId: search.sampleId }),
+  loader: async ({ deps }): Promise<SupabaseJourneyResponse & { requestedSampleId: string }> => {
+    const requestedSampleId = deps.sampleId;
     try {
       const result = (await readSupabaseJourney({
         data: { sampleId: requestedSampleId },
@@ -180,9 +180,11 @@ function JourneyCalendar() {
     };
   }, [now, sampleId]);
 
-  // Signed in with live custody data: compute on the server and save for the WhatsApp agent.
+  // Live custody data: compute on the server for everyone; only signed-in users also save
+  // the numbers for the WhatsApp agent.
   const [refreshed, setRefreshed] = useState<JourneyMetricsRefresh | null>(null);
-  const canRefresh = Boolean(session) && live.connected;
+  const canRefresh = live.connected;
+  const signedIn = Boolean(session);
   const refreshTick = now ? Math.floor(now.getTime() / 30000) : 0;
   useEffect(() => {
     if (!canRefresh) {
@@ -190,7 +192,8 @@ function JourneyCalendar() {
       return;
     }
     let cancelled = false;
-    void refreshJourneyMetrics({ data: { sampleId } })
+    const run = signedIn ? refreshJourneyMetrics : readJourneyMetrics;
+    void run({ data: { sampleId } })
       .then((result) => {
         if (!cancelled) setRefreshed(result);
       })
@@ -200,7 +203,7 @@ function JourneyCalendar() {
     return () => {
       cancelled = true;
     };
-  }, [canRefresh, refreshTick, sampleId]);
+  }, [canRefresh, refreshTick, sampleId, signedIn]);
 
   const journeyMetrics = useMemo(() => {
     if (!live.connected) return simulatedJourneyMetrics(synthetic);
@@ -208,7 +211,7 @@ function JourneyCalendar() {
       return {
         asOf: undefined,
         metrics: refreshed.metrics,
-        saveStatus: { saved: refreshed.saved, error: refreshed.saveError },
+        saveStatus: signedIn ? { saved: refreshed.saved, error: refreshed.saveError } : undefined,
       };
     }
     if (!now) return null;
@@ -223,17 +226,40 @@ function JourneyCalendar() {
         }),
       ),
     };
-  }, [live, now, refreshed, sampleId, synthetic]);
+  }, [live, now, refreshed, sampleId, signedIn, synthetic]);
   const syntheticSample =
     SYNTHETIC_SAMPLE_RECORDS.find((record) => record.displayId === sampleId) ??
     SYNTHETIC_SAMPLE_RECORDS[0]!;
   const connected = live.connected;
   const sample = connected ? live.sample : syntheticSample;
 
+  // With live data, milestones, pickup and ETA come from real custody events and metrics.
+  const liveMetrics = connected ? (journeyMetrics?.metrics ?? null) : null;
+  const onReturnTrip = liveMetrics?.leg === "return";
+  const milestones = connected
+    ? milestonesFromCustody(live.custodyEvents)
+    : synthetic.milestones.map((milestone) => ({ ...milestone }));
+  // Who holds the sample now: the facility of the latest reached milestone.
+  const currentHolder: JourneyRoutePoint["facility"] =
+    [...milestones].reverse().find((milestone) => milestone.status !== "pending")?.facility ??
+    "Fertility Centre";
   let replayPoints: JourneyRoutePoint[] = synthetic.routePoints.map((point) => ({ ...point }));
-  const milestones = synthetic.milestones.map((milestone) => ({ ...milestone }));
-  const etaAt = synthetic.etaAt;
-  const etaSource = synthetic.etaSource;
+  const etaAt = connected
+    ? liveMetrics?.etaMethod === "arrived"
+      ? liveMetrics.arrivedAt
+      : (liveMetrics?.etaAt ?? null)
+    : synthetic.etaAt;
+  const etaLabel = connected
+    ? liveMetrics?.etaMethod === "arrived"
+      ? "Arrived"
+      : liveMetrics?.etaMethod === "distance_speed_estimate"
+        ? "Approximate ETA"
+        : "ETA unavailable"
+    : synthetic.etaSource === "scheduled"
+      ? "Scheduled ETA"
+      : synthetic.etaSource === "calculated"
+        ? "Calculated ETA"
+        : "Simulated ETA";
   let currentStage = synthetic.currentStage;
 
   if (connected) {
@@ -265,13 +291,13 @@ function JourneyCalendar() {
           latitude: lat,
           longitude: lng,
           recordedAt: at,
-          facility: genericFacilityLabel(
-            typeof point["facility"] === "string"
-              ? point["facility"]
-              : typeof point["location"] === "string"
-                ? point["location"]
-                : null,
-          ) as JourneyRoutePoint["facility"],
+          // Route rows carry no facility; label them with the custody holder at that point.
+          facility:
+            typeof point["facility"] === "string" || typeof point["location"] === "string"
+              ? (genericFacilityLabel(
+                  typeof point["facility"] === "string" ? point["facility"] : point["location"],
+                ) as JourneyRoutePoint["facility"])
+              : currentHolder,
           label: typeof point["label"] === "string" ? point["label"] : "Recorded route point",
         },
       ];
@@ -282,8 +308,9 @@ function JourneyCalendar() {
         : synthetic.currentStage;
   }
 
-  const pickup = formatSampleTimestamp(synthetic.pickupAt);
-  const eta = formatSampleTimestamp(etaAt);
+  const pickupAt = connected ? (liveMetrics?.pickupAt ?? null) : synthetic.pickupAt;
+  const pickup = pickupAt ? formatSampleTimestamp(pickupAt) : { text: "Not picked up yet" };
+  const eta = etaAt ? formatSampleTimestamp(etaAt) : { text: "Not available yet" };
   const latestPoint = replayPoints.at(-1);
   const latestLocation = latestPoint ? formatSampleTimestamp(latestPoint.recordedAt) : null;
   const completedCount = milestones.filter((milestone) => milestone.status === "completed").length;
@@ -336,7 +363,9 @@ function JourneyCalendar() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-5 pt-1">
-              <p className="font-medium">Fertility Centre</p>
+              <p className="font-medium">
+                {onReturnTrip ? "Cryogenic Storage" : "Fertility Centre"}
+              </p>
               <time dateTime={pickup.dateTime} className="mt-1 block text-sm text-muted-foreground">
                 {pickup.text}
               </time>
@@ -350,16 +379,14 @@ function JourneyCalendar() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-5 pt-1">
-              <p className="font-medium">Cryogenic Storage</p>
+              <p className="font-medium">
+                {onReturnTrip ? "Fertility Centre" : "Cryogenic Storage"}
+              </p>
               <time dateTime={eta.dateTime} className="mt-1 block text-sm text-muted-foreground">
                 {eta.text}
               </time>
               <Badge variant="outline" className="mt-3 border-amber-200 bg-amber-50 text-amber-900">
-                {etaSource === "scheduled"
-                  ? "Scheduled ETA"
-                  : etaSource === "calculated"
-                    ? "Calculated ETA"
-                    : "Simulated ETA"}
+                {etaLabel}
               </Badge>
             </CardContent>
           </Card>
@@ -415,7 +442,9 @@ function JourneyCalendar() {
             <CardContent className="p-6 pt-2 md:p-8 md:pt-3">
               <ol aria-label="Journey milestones" className="space-y-0">
                 {milestones.map((milestone, index) => {
-                  const timestamp = formatSampleTimestamp(milestone.at);
+                  const timestamp = milestone.at
+                    ? formatSampleTimestamp(milestone.at)
+                    : { text: "Not reached yet" };
                   const stateClass =
                     milestone.status === "completed"
                       ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200"

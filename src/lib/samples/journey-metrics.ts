@@ -114,6 +114,16 @@ export function distanceKm(from: { lat: number; lon: number }, to: { lat: number
   return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/** "40 min", "2 h 5 min" or "3 d 4 h" for notices and delay reasons. */
+function formatAge(seconds: number) {
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return minutes % 60 ? `${hours} h ${minutes % 60} min` : `${hours} h`;
+  const days = Math.floor(hours / 24);
+  return hours % 24 ? `${days} d ${hours % 24} h` : `${days} d`;
+}
+
 function minutesBetween(start: number, end: number) {
   return Math.max(0, Math.round((end - start) / 60000));
 }
@@ -147,7 +157,7 @@ export function deriveJourneyMetrics(input: JourneyMetricsInput): JourneyMetrics
   if (!last) notices.push("No location data available.");
   else if (locationStale) {
     notices.push(
-      `Last location update is ${Math.round(locationAgeSeconds! / 60)} min old; current position is unknown.`,
+      `Last location update is ${formatAge(locationAgeSeconds!)} old; current position is unknown.`,
     );
   }
 
@@ -224,7 +234,7 @@ export function deriveJourneyMetrics(input: JourneyMetricsInput): JourneyMetrics
   let delayReason: string | null = null;
   if (pickup && !arrivedAfterPickup && last) {
     if (locationStale) {
-      delayReason = `GPS signal lost: last update ${Math.round(locationAgeSeconds! / 60)} min ago`;
+      delayReason = `GPS signal lost: last update ${formatAge(locationAgeSeconds!)} ago`;
     } else if (typeof last.point.speedKmh === "number" && last.point.speedKmh < STATIONARY_KMH) {
       delayReason = "Vehicle stationary";
     }

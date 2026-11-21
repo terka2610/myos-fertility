@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { publicSupabaseRead } from "./public-read";
 import { DEMO_SAMPLE_VEHICLES, fetchLatestFix, type VehicleFixResult } from "./gps-monitor";
 import {
   deriveJourneyMetrics,
@@ -58,57 +59,73 @@ export type JourneyMetricsRefresh =
   | { connected: true; metrics: JourneyMetrics; saved: boolean; saveError: string | null }
   | { connected: false; message: string };
 
+/** Computes journey metrics from Supabase custody data plus the live courier fix. */
+async function computeJourneyMetrics(
+  supabase: never,
+  sampleId: string,
+): Promise<JourneyMetrics | null> {
+  const [snapshot, custody, route, live] = await Promise.all([
+    readSupabaseSnapshot(supabase, sampleId),
+    readSupabaseCustodyEvents(supabase, sampleId),
+    readSupabaseRoutePoints(supabase, sampleId),
+    liveFixForSample(sampleId),
+  ]);
+  if (!snapshot.ok || !custody.ok || !route.ok) return null;
+
+  const sampleRow = Array.isArray(snapshot.data) ? snapshot.data[0] : snapshot.data;
+  const record = (sampleRow ?? {}) as Record<string, unknown>;
+  const onReturnLeg = custody.data.some(
+    (row) => typeof row["step"] === "string" && RETURN_STEPS.has(row["step"]),
+  );
+  const destination = facilityPoint(onReturnLeg ? record["origin"] : record["destination"]);
+
+  const input = journeyInputFromSupabaseRows({
+    sampleId,
+    now: new Date(),
+    routePoints: route.data,
+    custodyEvents: custody.data,
+    destination,
+  });
+  const liveInput =
+    live?.ok === true
+      ? {
+          ...input,
+          source: "live_vehicle" as const,
+          locations: [
+            {
+              lat: live.fix.lat,
+              lon: live.fix.lon,
+              recordedAt: live.fix.recordedAt,
+              speedKmh: live.fix.speedKmh,
+            },
+          ],
+        }
+      : input;
+  const metrics = deriveJourneyMetrics(liveInput);
+  if (live && !live.ok) metrics.notices.unshift("Live courier GPS is unavailable right now.");
+  return metrics;
+}
+
+/** Read-only metrics for anyone viewing the demo; nothing is written. */
+export const readJourneyMetrics = createServerFn({ method: "POST" })
+  .middleware([publicSupabaseRead])
+  .inputValidator((data: unknown) => inputSchema.parse(data))
+  .handler(async ({ data, context }): Promise<JourneyMetricsRefresh> => {
+    const metrics = await computeJourneyMetrics(context.supabase as never, data.sampleId);
+    if (!metrics) return { connected: false, message: "Live sample information is unavailable." };
+    return { connected: true, metrics, saved: false, saveError: null };
+  });
+
 /**
- * Computes journey metrics from Supabase custody data plus the live courier fix, and writes
- * one timestamped row for the WhatsApp agent. Never sends messages itself.
+ * Signed-in refresh: computes the metrics and writes one timestamped row for the WhatsApp agent.
+ * Never sends messages itself.
  */
 export const refreshJourneyMetrics = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => inputSchema.parse(data))
   .handler(async ({ data, context }): Promise<JourneyMetricsRefresh> => {
-    const supabase = context.supabase as never;
-    const [snapshot, custody, route, live] = await Promise.all([
-      readSupabaseSnapshot(supabase, data.sampleId),
-      readSupabaseCustodyEvents(supabase, data.sampleId),
-      readSupabaseRoutePoints(supabase, data.sampleId),
-      liveFixForSample(data.sampleId),
-    ]);
-    if (!snapshot.ok || !custody.ok || !route.ok) {
-      return { connected: false, message: "Live sample information is unavailable." };
-    }
-
-    const sampleRow = Array.isArray(snapshot.data) ? snapshot.data[0] : snapshot.data;
-    const record = (sampleRow ?? {}) as Record<string, unknown>;
-    const onReturnLeg = custody.data.some(
-      (row) => typeof row["step"] === "string" && RETURN_STEPS.has(row["step"]),
-    );
-    const destination = facilityPoint(onReturnLeg ? record["origin"] : record["destination"]);
-
-    const now = new Date();
-    const input = journeyInputFromSupabaseRows({
-      sampleId: data.sampleId,
-      now,
-      routePoints: route.data,
-      custodyEvents: custody.data,
-      destination,
-    });
-    const liveInput =
-      live?.ok === true
-        ? {
-            ...input,
-            source: "live_vehicle" as const,
-            locations: [
-              {
-                lat: live.fix.lat,
-                lon: live.fix.lon,
-                recordedAt: live.fix.recordedAt,
-                speedKmh: live.fix.speedKmh,
-              },
-            ],
-          }
-        : input;
-    const metrics = deriveJourneyMetrics(liveInput);
-    if (live && !live.ok) metrics.notices.unshift("Live courier GPS is unavailable right now.");
+    const metrics = await computeJourneyMetrics(context.supabase as never, data.sampleId);
+    if (!metrics) return { connected: false, message: "Live sample information is unavailable." };
 
     const writer = context.supabase as unknown as {
       from: (table: string) => {

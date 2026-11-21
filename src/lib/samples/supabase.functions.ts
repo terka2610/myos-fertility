@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { publicSupabaseRead } from "./public-read";
 import {
   mapSnapshotToRegistry,
   mapGenericFacility,
@@ -80,7 +80,7 @@ function safeRoutePoints(rows: readonly RoutePointRow[]): RoutePointRow[] {
 }
 
 export const readSupabaseSample = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([publicSupabaseRead])
   .inputValidator((data: unknown) => inputSchema.parse(data))
   .handler(async ({ data, context }): Promise<SupabaseSampleResponse> => {
     const supabase = context.supabase as never;
@@ -108,7 +108,7 @@ export const readSupabaseSample = createServerFn({ method: "POST" })
   });
 
 export const readSupabaseCustody = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([publicSupabaseRead])
   .inputValidator((data: unknown) => inputSchema.parse(data))
   .handler(
     async ({
@@ -125,7 +125,7 @@ export const readSupabaseCustody = createServerFn({ method: "POST" })
   );
 
 export const readSupabaseRoute = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([publicSupabaseRead])
   .inputValidator((data: unknown) => inputSchema.parse(data))
   .handler(
     async ({
@@ -142,7 +142,7 @@ export const readSupabaseRoute = createServerFn({ method: "POST" })
   );
 
 export const readSupabaseJourney = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([publicSupabaseRead])
   .inputValidator((data: unknown) => inputSchema.parse(data))
   .handler(async ({ data, context }): Promise<SupabaseJourneyResponse> => {
     const supabase = context.supabase as never;
