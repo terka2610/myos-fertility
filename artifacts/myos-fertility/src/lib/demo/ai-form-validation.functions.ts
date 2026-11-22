@@ -23,7 +23,7 @@ const voiceInputSchema = z.object({
 });
 
 export const validateFormWithAI = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => inputSchema.parse(data))
+  .validator((data: unknown) => inputSchema.parse(data))
   .handler(async ({ data }): Promise<AIValidationResult> => {
     const form = getFormDefinition(data.formId);
     if (!form) {
@@ -128,7 +128,7 @@ export const validateFormWithAI = createServerFn({ method: "POST" })
   });
 
 export const extractVoiceFieldsWithAI = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => voiceInputSchema.parse(data))
+  .validator((data: unknown) => voiceInputSchema.parse(data))
   .handler(async ({ data }): Promise<VoiceExtractionResult> => {
     const form = getFormDefinition(data.formId);
     if (!form) {

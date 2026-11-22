@@ -3,6 +3,10 @@ import { AlertTriangle, CheckCircle2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  getFormDefinition,
+  runDeterministicValidation,
+} from "@/lib/demo/ai-form-validation";
 import { validateFormWithAI } from "@/lib/demo/ai-form-validation.functions";
 import type { AIValidationResult } from "@/lib/demo/ai-form-validation";
 
@@ -30,6 +34,22 @@ export function AIFormValidation({ formId, fields, onApply, validator }: Props) 
     setResult(null);
     setApproved({});
     try {
+      if (!allowAI) {
+        const form = getFormDefinition(formId);
+        const deterministicIssues = form
+          ? runDeterministicValidation(form, fields)
+          : [];
+        setResult({
+          enabled: false,
+          issues: deterministicIssues,
+          deterministicIssues,
+          aiIssues: [],
+          message: form
+            ? "Local checks ran. AI review is off until you confirm the entries are synthetic."
+            : "This document form could not be found.",
+        });
+        return;
+      }
       const run = validator ?? ((input) => validateFormWithAI({ data: input }));
       setResult(await run({ formId, fields, syntheticConfirmed: allowAI }));
     } catch {
