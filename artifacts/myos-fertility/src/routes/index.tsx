@@ -105,6 +105,10 @@ function Landing() {
             {isSupabaseConfigured()
               ? "Provider and patient demos open shared accounts. The clinic-to-storage walkthrough uses synthetic records."
               : "Provider and patient demos are unavailable until the backend is connected. The clinic-to-storage walkthrough is ready and uses synthetic records."}
+            {" "}
+            <Link to="/clinics" className="font-medium text-primary underline underline-offset-4" data-testid="link-browse-demo-clinics">
+              Browse fictional demo clinics
+            </Link>
           </p>
         </div>
         <div className="relative mx-auto w-full max-w-[340px]">

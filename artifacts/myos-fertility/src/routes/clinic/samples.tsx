@@ -53,7 +53,7 @@ function RegistryPage({ children }: { children: React.ReactNode }) {
   );
 }
 
-function RegistryHeading() {
+function RegistryHeading({ selectedClinicId }: { selectedClinicId?: string }) {
   return (
     <header className="mb-6 max-w-4xl">
       <Link
@@ -79,17 +79,22 @@ function RegistryHeading() {
         <CalendarDays aria-hidden="true" className="size-4" />
         Open journey calendar
       </Link>
+      {selectedClinicId && (
+        <p role="note" className="mt-3 text-xs text-muted-foreground">
+          Selected clinic {selectedClinicId} is a fictional demo choice; registry data remains synthetic and is not filtered by this selection.
+        </p>
+      )}
     </header>
   );
 }
 
 function ClinicSamples() {
   const samples = Route.useLoaderData();
-  const { place } = Route.useSearch();
+  const { place, selectedClinicId } = Route.useSearch();
 
   return (
     <RegistryPage>
-      <RegistryHeading />
+      <RegistryHeading selectedClinicId={selectedClinicId} />
       <SampleTransferDemo initialPlace={place ?? "centre"} />
       <details className="mt-8 rounded-3xl border border-border p-5">
         <summary className="cursor-pointer font-medium">Sample registry · synthetic records</summary>

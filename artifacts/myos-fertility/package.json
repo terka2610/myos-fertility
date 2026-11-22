@@ -10,6 +10,7 @@
     "test:workflow": "playwright test --config playwright.config.ts",
     "test:journey": "node --experimental-strip-types --test src/lib/samples/cryo-journey.test.mjs",
     "test:form-validation": "node --experimental-strip-types --test src/lib/demo/ai-form-validation.test.mjs",
+    "test:clinics": "node --experimental-strip-types --test src/lib/clinics/selection.test.mjs",
     "test:scene-performance": "node performance/run-scene-performance.mjs",
     "test:scene-budgets": "node --test performance/budgets.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
