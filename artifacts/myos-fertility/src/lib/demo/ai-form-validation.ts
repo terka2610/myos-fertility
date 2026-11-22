@@ -18,6 +18,18 @@ export interface AIValidationResult {
   message?: string;
 }
 
+export interface VoiceExtractionSuggestion {
+  fieldId: string;
+  value: string;
+  confidence: number;
+}
+
+export interface VoiceExtractionResult {
+  enabled: boolean;
+  suggestions: VoiceExtractionSuggestion[];
+  message?: string;
+}
+
 export const AI_VALIDATION_RESPONSE_SCHEMA = z.object({
   issues: z.array(z.object({
     fieldName: z.string().min(1).max(200),
@@ -26,6 +38,14 @@ export const AI_VALIDATION_RESPONSE_SCHEMA = z.object({
     explanation: z.string().min(1).max(1000),
     confidence: z.number().min(0).max(1),
   })).max(20),
+});
+
+export const VOICE_EXTRACTION_RESPONSE_SCHEMA = z.object({
+  suggestions: z.array(z.object({
+    fieldId: z.string().min(1).max(200),
+    value: z.string().max(1000),
+    confidence: z.number().min(0).max(1),
+  })).max(30),
 });
 
 const PROTECTED_KEYS = new Set([
@@ -38,6 +58,7 @@ const PROTECTED_KEYS = new Set([
   "reconciliationResult",
   "expectedSealId",
   "observedSealId",
+  "staffMember",
 ]);
 
 const PROTECTED_LABELS = [
@@ -58,6 +79,46 @@ export function isProtectedField(fieldName: string, form: DemoFormDefinition) {
   const field = form.fields.find((candidate) => candidate.key === fieldName);
   const searchable = `${fieldName} ${field?.label ?? ""}`.toLowerCase();
   return PROTECTED_KEYS.has(fieldName) || PROTECTED_LABELS.some((label) => searchable.includes(label));
+}
+
+export function resolveVoiceFieldId(fieldId: string, form: DemoFormDefinition) {
+  if (fieldId === "label" || fieldId === "notes") return fieldId;
+  const normalized = fieldId.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const field = form.fields.find((candidate) =>
+    candidate.key === fieldId ||
+    candidate.key.toLowerCase().replace(/[^a-z0-9]/g, "") === normalized ||
+    candidate.label.toLowerCase().replace(/[^a-z0-9]/g, "") === normalized,
+  );
+  return field?.key;
+}
+
+export function validateVoiceExtractionResponse(content: string, form: DemoFormDefinition) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error("The AI returned invalid JSON.");
+  }
+  const response = VOICE_EXTRACTION_RESPONSE_SCHEMA.parse(parsed);
+  return response.suggestions.flatMap((suggestion) => {
+    const fieldId = resolveVoiceFieldId(suggestion.fieldId, form);
+    if (!fieldId) return [];
+    if (fieldId !== "label" && fieldId !== "notes" && isProtectedField(fieldId, form)) return [];
+    const field = form.fields.find((candidate) => candidate.key === fieldId);
+    if (!field) {
+      return fieldId === "label" || fieldId === "notes"
+        ? [{ ...suggestion, fieldId, value: suggestion.value.trim() }]
+        : [];
+    }
+    const value = suggestion.value.trim();
+    if (!value || value.length > (field.type === "textarea" ? 1000 : 200)) return [];
+    if (field.type === "select") {
+      const allowed = field.options?.find((option) => option.toLowerCase() === value.toLowerCase());
+      return allowed ? [{ ...suggestion, fieldId, value: allowed }] : [];
+    }
+    if (field.type === "datetime-local" && !validDateTime(value)) return [];
+    return [{ ...suggestion, fieldId, value }];
+  });
 }
 
 function validDateTime(value: string) {

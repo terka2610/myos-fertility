@@ -5,6 +5,7 @@ import {
   isProtectedField,
   runDeterministicValidation,
   validateAIResponse,
+  validateVoiceExtractionResponse,
 } from "./ai-form-validation.ts";
 
 test("local validation catches missing and malformed fields", () => {
@@ -29,7 +30,22 @@ test("patient, consent, custody, and seal fields are protected", () => {
 
   assert.equal(isProtectedField("sampleId", form), true);
   assert.equal(isProtectedField("handoverLocation", form), true);
-  assert.equal(isProtectedField("staffMember", form), false);
+  assert.equal(isProtectedField("staffMember", form), true);
+});
+
+test("voice extraction accepts only allowed, unprotected form values", () => {
+  const form = SAMPLE_DOCUMENT_FORMS.find((candidate) => candidate.id === "CLI-001");
+  assert.ok(form);
+  const result = validateVoiceExtractionResponse(JSON.stringify({
+    suggestions: [
+      { fieldId: "destination", value: "Demo Storage", confidence: 0.9 },
+      { fieldId: "sampleId", value: "SMP-0001", confidence: 1 },
+      { fieldId: "registeredAt", value: "2026-02-30T25:00", confidence: 0.8 },
+      { fieldId: "unknown", value: "unexpected", confidence: 0.9 },
+    ],
+  }), form);
+
+  assert.deepEqual(result.map((suggestion) => suggestion.fieldId), ["destination"]);
 });
 
 test("AI output cannot apply protected values or modify unknown fields", () => {

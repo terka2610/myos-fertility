@@ -1,11 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Mic, MicOff } from "lucide-react";
+import { Mic, MicOff, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { DemoFormField, DemoFormFieldType } from "@/lib/demo/sample-transfer";
+import { extractVoiceFieldsWithAI } from "@/lib/demo/ai-form-validation.functions";
+import type { VoiceExtractionResult } from "@/lib/demo/ai-form-validation";
 
 type RecognitionMode = "on-device" | "browser";
 type SpeechPart = "pickup-date" | "pickup-time";
@@ -59,6 +61,7 @@ interface VoiceTarget {
 interface VoiceProposal extends VoiceTarget {
   value: string;
   replaceExisting: boolean;
+  aiConfidence?: number;
 }
 
 interface VoiceFormUpdates {
@@ -68,6 +71,7 @@ interface VoiceFormUpdates {
 }
 
 interface VoiceFormFillProps {
+  formId: string;
   fields: readonly DemoFormField[];
   notesLabel: string;
   formTitle: string;
@@ -75,6 +79,11 @@ interface VoiceFormFillProps {
   currentLabel: string;
   currentNotes: string;
   onApply: (updates: VoiceFormUpdates) => void;
+  extractor?: (input: {
+    formId: string;
+    transcript: string;
+    syntheticConfirmed: boolean;
+  }) => Promise<VoiceExtractionResult>;
 }
 
 interface SpeechSession {
@@ -420,6 +429,7 @@ function currentValueForTarget(
 }
 
 export function VoiceFormFill({
+  formId,
   fields,
   notesLabel,
   formTitle,
@@ -427,6 +437,7 @@ export function VoiceFormFill({
   currentLabel,
   currentNotes,
   onApply,
+  extractor,
 }: VoiceFormFillProps) {
   const [open, setOpen] = useState(false);
   const [speechAvailable, setSpeechAvailable] = useState(false);
@@ -438,6 +449,9 @@ export function VoiceFormFill({
   const [proposals, setProposals] = useState<VoiceProposal[]>([]);
   const [issues, setIssues] = useState<string[]>([]);
   const [applyMessage, setApplyMessage] = useState<string | null>(null);
+  const [allowAI, setAllowAI] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [applied, setApplied] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const transcriptId = useId();
@@ -464,6 +478,9 @@ export function VoiceFormFill({
     setProposals([]);
     setIssues([]);
     setApplyMessage(null);
+    setAllowAI(false);
+    setAiLoading(false);
+    setAiMessage(null);
     setApplied(false);
     setOpen(true);
   }
@@ -478,6 +495,8 @@ export function VoiceFormFill({
       setTranscript(recognized);
       setProposals([]);
       setIssues([]);
+      setAllowAI(false);
+      setAiMessage(null);
       setApplied(false);
       setApplyMessage(null);
     };
@@ -560,6 +579,8 @@ export function VoiceFormFill({
     setProposals([]);
     setIssues([]);
     setApplyMessage(null);
+    setAllowAI(false);
+    setAiMessage(null);
     setApplied(false);
     setRecognitionError(null);
 
@@ -598,6 +619,60 @@ export function VoiceFormFill({
     setIssues(extracted.issues);
     setApplied(false);
     setApplyMessage(null);
+    setAiMessage("Local keyword matching ran in your browser; the transcript was not sent for AI review.");
+  }
+
+  async function reviewTranscriptWithAI() {
+    if (!transcript.trim()) return;
+    if (!allowAI) {
+      reviewTranscript();
+      setAiMessage("AI review is off. Local matching ran only; confirm synthetic data before requesting external AI review.");
+      return;
+    }
+
+    setAiLoading(true);
+    setAiMessage(null);
+    setApplied(false);
+    setApplyMessage(null);
+    try {
+      const runExtractor = extractor ?? ((input) => extractVoiceFieldsWithAI({ data: input }));
+      const result = await runExtractor({
+        formId,
+        transcript: transcript.trim(),
+        syntheticConfirmed: true,
+      });
+      const targetByKey = new Map(targets.map((target) => [target.key, target]));
+      const aiProposals = result.suggestions.flatMap((suggestion) => {
+        const target = targetByKey.get(suggestion.fieldId);
+        if (!target) return [];
+        if (
+          target.kind === "field" &&
+          ["sampleId", "patientAlias", "shipmentId", "consentVersion", "sealId", "expectedSealId", "observedSealId", "reconciliationResult", "staffMember", "handoverLocation"].includes(target.key)
+        ) return [];
+        return [{
+          ...target,
+          value: suggestion.value,
+          replaceExisting: false,
+          aiConfidence: suggestion.confidence,
+        }];
+      });
+      setAiMessage(result.message ?? "AI suggestions are ready for manual review.");
+      if (result.enabled && aiProposals.length > 0) {
+        setProposals(aiProposals);
+        setIssues([]);
+      } else {
+        const local = extractVoiceValues(transcript, targets);
+        setProposals(local.proposals);
+        setIssues(local.issues);
+      }
+    } catch {
+      const local = extractVoiceValues(transcript, targets);
+      setProposals(local.proposals);
+      setIssues(local.issues);
+      setAiMessage("AI extraction is unavailable. Local matching ran; review each proposed value manually.");
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   function updateProposal(
@@ -662,6 +737,8 @@ export function VoiceFormFill({
     setProposals([]);
     setIssues([]);
     setApplyMessage(null);
+    setAllowAI(false);
+    setAiMessage(null);
     setApplied(false);
   }
 
@@ -671,6 +748,8 @@ export function VoiceFormFill({
     setIssues([]);
     setApplyMessage(null);
     setApplied(false);
+    setAllowAI(false);
+    setAiMessage(null);
   }
 
   const canApply = proposals.some((proposal) => !hasConflict(proposal) || proposal.replaceExisting);
@@ -726,10 +805,31 @@ export function VoiceFormFill({
               rows={3}
               maxLength={4000}
               value={transcript}
+              disabled={aiLoading}
               onChange={(event) => handleTranscriptChange(event.target.value)}
               placeholder="Recognized words or a pasted transcript will appear here."
             />
           </div>
+          <div className="flex items-start gap-2 rounded-lg bg-secondary/50 p-3">
+            <Checkbox
+              id={`${transcriptId}-synthetic-ai`}
+              checked={allowAI}
+              onCheckedChange={(checked) => setAllowAI(checked === true)}
+              disabled={aiLoading}
+              data-testid="checkbox-voice-synthetic-ai"
+            />
+            <Label htmlFor={`${transcriptId}-synthetic-ai`} className="text-xs leading-5">
+              I confirm this is synthetic demo data and allow the transcript to be sent to Groq for field mapping. Never use real patient information.
+            </Label>
+          </div>
+          {aiMessage && (
+            <p
+              role={/unavailable|failed|not configured/i.test(aiMessage) ? "alert" : "status"}
+              className="text-sm text-muted-foreground"
+            >
+              {aiMessage}
+            </p>
+          )}
           {proposals.length > 0 && (
             <div
               role="region"
@@ -753,7 +853,14 @@ export function VoiceFormFill({
                       className="rounded-lg border border-border bg-background p-3"
                     >
                       <div className="space-y-2">
-                        <Label htmlFor={inputId}>{proposal.label}</Label>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Label htmlFor={inputId}>{proposal.label}</Label>
+                          {proposal.aiConfidence !== undefined && (
+                            <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+                              AI suggestion · {Math.round(proposal.aiConfidence * 100)}%
+                            </span>
+                          )}
+                        </div>
                         {proposal.type === "select" ? (
                           <select
                             id={inputId}
@@ -858,10 +965,22 @@ export function VoiceFormFill({
               size="sm"
               variant="outline"
               className="rounded-full"
-              disabled={!transcript.trim() || listening}
+              disabled={!transcript.trim() || listening || aiLoading}
               onClick={reviewTranscript}
             >
-              Review
+              Review locally
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="rounded-full"
+              disabled={!transcript.trim() || listening || aiLoading}
+              onClick={reviewTranscriptWithAI}
+              data-testid="button-ai-voice-review"
+            >
+              <Sparkles aria-hidden="true" />
+              {aiLoading ? "Reviewing…" : "AI review"}
             </Button>
             <Button
               type="button"
