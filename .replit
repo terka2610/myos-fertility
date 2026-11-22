@@ -38,3 +38,13 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+GROQ_MODEL = "openai/gpt-oss-120b"
+LINQ_DOCTOR_ID = "d0c70000-0000-4000-8000-000000000004"
+SUPABASE_PROJECT_ID = "krlhagsprstqiwzmfpsh"
+SUPABASE_URL = "https://krlhagsprstqiwzmfpsh.supabase.co"
+VITE_SUPABASE_PROJECT_ID = "krlhagsprstqiwzmfpsh"
+VITE_SUPABASE_URL = "https://krlhagsprstqiwzmfpsh.supabase.co"
