@@ -36,6 +36,7 @@ import {
   placeCounts,
 } from "@/components/clinic/journey/JourneyWorkArea";
 import { VoiceFormFill } from "@/components/clinic/VoiceFormFill";
+import { AIFormValidation } from "@/components/clinic/AIFormValidation";
 import {
   createInitialSampleTransferState,
   parseSampleTransferState,
@@ -819,6 +820,17 @@ export function SampleTransferDemo({ initialPlace = "centre" }: { initialPlace?:
                     ))}
                   </select>
                 </div>
+                <AIFormValidation
+                  formId={activeForm.id}
+                  fields={formDraft.fields}
+                  onApply={(fieldKey, correction) => {
+                    if (!activeForm.fields.some((field) => field.key === fieldKey)) return;
+                    setFormDraft((previous) => ({
+                      ...previous,
+                      fields: { ...previous.fields, [fieldKey]: correction },
+                    }));
+                  }}
+                />
                 {formMessage && (
                   <p role="alert" className="text-sm text-destructive">
                     {formMessage}
