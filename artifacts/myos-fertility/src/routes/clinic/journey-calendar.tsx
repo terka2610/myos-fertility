@@ -2,6 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CalendarDays, Clock3, MapPin, RefreshCw, Truck } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/myos/PublicHeader";
+import { JourneyMetricsPanel } from "@/components/clinic/JourneyMetricsPanel";
+import { JourneyRouteReplay } from "@/components/clinic/JourneyRouteReplay";
+import { LiveVehicleCard } from "@/components/clinic/LiveVehicleCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -168,8 +171,21 @@ function JourneyCalendar() {
 
             <div className="grid gap-6 lg:grid-cols-[1fr_1.15fr]">
               <MilestoneTimeline snapshot={snapshot} metrics={metrics} />
-              <RouteMap snapshot={snapshot} />
+              {snapshot.feed.trail.length > 0 ? (
+                <JourneyRouteReplay points={snapshot.feed.trail} sampleId={snapshot.sampleId} />
+              ) : (
+                <RouteMap snapshot={snapshot} />
+              )}
             </div>
+            <details className="rounded-2xl border border-border bg-card px-5 py-4">
+              <summary className="cursor-pointer text-sm font-medium">
+                Courier details and additional metrics
+              </summary>
+              <div className="mt-4 space-y-4">
+                <LiveVehicleCard snapshot={snapshot} metrics={metrics} />
+                <JourneyMetricsPanel snapshot={snapshot} metrics={metrics} />
+              </div>
+            </details>
             <p className="text-xs text-muted-foreground">
               Workflow status: {snapshot.schedule.status} · Updates automatically every 15 seconds.
             </p>

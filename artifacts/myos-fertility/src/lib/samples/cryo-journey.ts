@@ -15,9 +15,11 @@ export interface JourneyFix {
 }
 
 export interface JourneyRoutePoint {
+  id: string;
   latitude: number;
   longitude: number;
   recordedAt: string | null;
+  label: string;
 }
 
 export interface JourneyCustodyEvent {
@@ -47,6 +49,7 @@ export interface JourneySnapshot {
 }
 
 export interface JourneyMetrics {
+  stage: string;
   pickupAt: string | null;
   receivedAt: string | null;
   placedAt: string | null;
@@ -55,6 +58,8 @@ export interface JourneyMetrics {
   locationAgeSeconds: number | null;
   locationStale: boolean | null;
   liveEtaAt: string | null;
+  delayReason: string | null;
+  notices: string[];
 }
 
 const DESTINATION = { latitude: 24.4338, longitude: 54.6182 };
@@ -96,7 +101,9 @@ function parseFix(value: unknown): JourneyFix | null {
   };
 }
 
-function parseRoutePoint(value: unknown): JourneyRoutePoint | null {
+function parseRoutePoint(
+  value: unknown,
+): Omit<JourneyRoutePoint, "id" | "label"> | null {
   if (!isRecord(value)) return null;
   const latitude = finiteNumber(value["latitude"]);
   const longitude = finiteNumber(value["longitude"]);
@@ -138,9 +145,9 @@ export function parseJourneySnapshot(value: unknown): JourneySnapshot | null {
       label: typeof feed["label"] === "string" ? feed["label"] : "Courier",
       message: typeof feed["message"] === "string" ? feed["message"] : "GPS feed unavailable.",
       lastFix: parseFix(feed["last_fix"]),
-      trail: rawTrail.flatMap((point) => {
+      trail: rawTrail.flatMap((point, index) => {
         const parsed = parseRoutePoint(point);
-        return parsed ? [parsed] : [];
+        return parsed ? [{ ...parsed, id: `${sampleId}-gps-${index + 1}`, label: `GPS point ${index + 1}` }] : [];
       }),
     },
     atDestination: value["at_destination"] === true,
@@ -189,7 +196,7 @@ function latestEventTime(events: readonly JourneyCustodyEvent[], eventType: stri
 
 function estimateSpeedKmh(snapshot: JourneySnapshot, now: Date) {
   const reported = snapshot.feed.lastFix?.speedKmh;
-  if (reported !== null && reported !== undefined && reported >= 15 && reported <= 150) {
+  if (reported !== null && reported !== undefined && Number.isFinite(reported)) {
     return reported;
   }
 
@@ -206,9 +213,11 @@ function estimateSpeedKmh(snapshot: JourneySnapshot, now: Date) {
     if (fixTime !== null && !locations.some((entry) => entry.time === fixTime)) {
       locations.push({
         point: {
+          id: "current-fix",
           latitude: snapshot.feed.lastFix.latitude,
           longitude: snapshot.feed.lastFix.longitude,
           recordedAt: snapshot.feed.lastFix.recordedAt,
+          label: "Latest GPS fix",
         },
         time: fixTime,
       });
@@ -239,12 +248,48 @@ export function deriveJourneyMetrics(snapshot: JourneySnapshot, now: Date): Jour
 
   const lastFix = snapshot.feed.lastFix;
   const fixTime = lastFix ? validTimestamp(lastFix.recordedAt) : null;
-  const age = fixTime === null ? null : Math.round((now.getTime() - fixTime) / 1000);
+  const rawAge = fixTime === null ? null : (now.getTime() - fixTime) / 1000;
+  const age = rawAge === null ? null : Math.round(rawAge);
   const locationAgeSeconds = age === null ? null : Math.max(0, age);
   const locationStale =
     lastFix === null
       ? null
-      : age === null || age < -MAX_FUTURE_SECONDS || age > STALE_AFTER_SECONDS;
+      : rawAge === null || rawAge < -MAX_FUTURE_SECONDS || rawAge > STALE_AFTER_SECONDS;
+
+  const events = snapshot.custody
+    .flatMap((event) => {
+      const time = validTimestamp(event.recordedAt);
+      return time === null || time > now.getTime() + MAX_FUTURE_SECONDS * 1000
+        ? []
+        : [{ event, time }];
+    })
+    .sort((first, second) => first.time - second.time);
+  const latestEvent = events.at(-1)?.event;
+  const stage = placedAt
+    ? "Stored at cryogenic storage"
+    : receivedAt
+      ? "Received at cryogenic storage"
+      : pickupAt
+        ? "In transit to cryogenic storage"
+        : latestEvent?.eventType === "order_placed"
+          ? "Order placed"
+          : snapshot.schedule.status || "Awaiting pickup";
+
+  const notices = [
+    "Synthetic GPS demo data only; it is not linked to patient or sample records.",
+    "Traffic estimates are unavailable because no traffic provider is connected.",
+  ];
+  if (!lastFix) notices.push("No courier GPS fix is available.");
+  else if (locationStale) {
+    notices.push(
+      locationAgeSeconds === null
+        ? "The GPS timestamp is invalid; current position is unknown."
+        : `The last GPS update was ${formatJourneyDuration(Math.round(locationAgeSeconds / 60))} ago; current position is unknown.`,
+    );
+  }
+  if (receivedAt && pickupTime !== null && receivedTime !== null && receivedTime < pickupTime) {
+    notices.push("The recorded storage receipt is earlier than pickup; transit completion is unconfirmed.");
+  }
 
   let liveEtaAt: string | null = null;
   if (
@@ -261,7 +306,17 @@ export function deriveJourneyMetrics(snapshot: JourneySnapshot, now: Date): Jour
     }
   }
 
+  let delayReason: string | null = null;
+  if (pickupAt && !receivedAt && lastFix) {
+    if (locationStale) {
+      delayReason = "GPS update is stale; current position is unknown";
+    } else if (typeof lastFix.speedKmh === "number" && lastFix.speedKmh < 3) {
+      delayReason = "Courier speed is below 3 km/h";
+    }
+  }
+
   return {
+    stage,
     pickupAt,
     receivedAt,
     placedAt,
@@ -270,6 +325,8 @@ export function deriveJourneyMetrics(snapshot: JourneySnapshot, now: Date): Jour
     locationAgeSeconds,
     locationStale,
     liveEtaAt,
+    delayReason,
+    notices,
   };
 }
 

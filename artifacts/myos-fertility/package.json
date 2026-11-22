@@ -8,6 +8,7 @@
     "build": "vite build --config vite.config.ts",
     "serve": "node .output/server/index.mjs",
     "test:workflow": "playwright test --config playwright.config.ts",
+    "test:journey": "node --experimental-strip-types --test src/lib/samples/cryo-journey.test.mjs",
     "test:scene-performance": "node performance/run-scene-performance.mjs",
     "test:scene-budgets": "node --test performance/budgets.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
