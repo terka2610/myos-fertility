@@ -1,0 +1,17 @@
+{
+  "phone-demo": {
+    "kind": "phone",
+    "label": "Operator phone",
+    "enabled": true
+  },
+  "bag-ship-01": {
+    "kind": "bag",
+    "label": "Specimen shipper",
+    "enabled": true
+  },
+  "vehicle-cryo-01": {
+    "kind": "vehicle",
+    "label": "Cryogenic courier",
+    "enabled": true
+  }
+}

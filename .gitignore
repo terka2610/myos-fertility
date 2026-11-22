@@ -63,3 +63,5 @@ Thumbs.db
 /.conversation/
 /attached_assets/
 /generated-artifacts/
+__pycache__/
+cryo/data/*.sqlite*

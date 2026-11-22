@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "calibratedOn": "2026-11-21",
+  "renderer": "Chromium 155.0.8059.79, SwiftShader, production Node server without compression",
+  "runs": 3,
+  "views": ["network", "centre", "transport", "storage", "patient"],
+  "observedMedians": {
+    "desktop": { "runs": 3, "readyMs": 1064.5, "interactionMs": 320.2, "downloadBytes": 2120197, "scriptBytes": 1839167, "cpuP95MsByView": [3.4, 3.3, 1.6, 1.6, 4.0] },
+    "mobile": { "runs": 3, "readyMs": 13003, "interactiveMs": 13558.8, "interactionMs": 491.6, "downloadBytes": 2119348, "scriptBytes": 1839167, "cpuP95MsByView": [5.8, 5.5, 7.8, 6.1, 3.3] }
+  },
+  "rationale": "Transfer and geometry limits allow approximately 20-25% growth. Timing limits allow host scheduling variance; per-view structural limits are the more stable signal. Median of three runs is required for every gate.",
+  "profiles": {
+    "desktop": {
+      "load": { "readyMs": 3000, "interactiveMs": 4500, "interactionMs": 2000, "downloadBytes": 2550000, "scriptBytes": 2210000 },
+      "render": {
+        "network": { "cpuP95Ms": 12, "intervalP95Ms": 200, "calls": 100, "triangles": 27000, "geometries": 100, "textures": 5 },
+        "centre": { "cpuP95Ms": 12, "intervalP95Ms": 150, "calls": 110, "triangles": 14500, "geometries": 105, "textures": 6 },
+        "transport": { "cpuP95Ms": 12, "intervalP95Ms": 130, "calls": 90, "triangles": 17000, "geometries": 85, "textures": 7 },
+        "storage": { "cpuP95Ms": 12, "intervalP95Ms": 160, "calls": 95, "triangles": 27500, "geometries": 90, "textures": 8 },
+        "patient": { "cpuP95Ms": 12, "intervalP95Ms": 140, "calls": 55, "triangles": 11000, "geometries": 55, "textures": 9 }
+      }
+    },
+    "mobile": {
+      "load": { "readyMs": 20000, "interactiveMs": 23000, "interactionMs": 2500, "downloadBytes": 2550000, "scriptBytes": 2210000 },
+      "render": {
+        "network": { "cpuP95Ms": 30, "intervalP95Ms": 100, "calls": 100, "triangles": 27000, "geometries": 100, "textures": 5 },
+        "centre": { "cpuP95Ms": 30, "intervalP95Ms": 70, "calls": 110, "triangles": 14500, "geometries": 105, "textures": 6 },
+        "transport": { "cpuP95Ms": 30, "intervalP95Ms": 80, "calls": 90, "triangles": 17000, "geometries": 85, "textures": 7 },
+        "storage": { "cpuP95Ms": 30, "intervalP95Ms": 80, "calls": 95, "triangles": 27500, "geometries": 90, "textures": 8 },
+        "patient": { "cpuP95Ms": 30, "intervalP95Ms": 70, "calls": 55, "triangles": 11000, "geometries": 55, "textures": 9 }
+      }
+    }
+  }
+}

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <base href="__BASE_PATH__/" />
+  <title>Share location</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #101614;
+      color: #e7f2eb;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+    }
+    main { max-width: 420px; margin: 0 auto; padding: 28px 20px 40px; }
+    .mark {
+      margin: 0 0 8px;
+      color: #7dcea0;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-size: 12px;
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; font-weight: 600; }
+    p { color: #93a89c; line-height: 1.45; }
+    label { display: block; margin: 22px 0 6px; font-size: 13px; color: #c5d4cb; }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #2a3a33;
+      border-radius: 12px;
+      background: #18211d;
+      color: #e7f2eb;
+      font: inherit;
+      font-size: 16px;
+      padding: 12px 14px;
+    }
+    button {
+      width: 100%;
+      margin-top: 18px;
+      border: 0;
+      border-radius: 999px;
+      background: #7dcea0;
+      color: #102018;
+      font: inherit;
+      font-size: 17px;
+      font-weight: 650;
+      padding: 14px 16px;
+    }
+    button.stop { background: #24302a; color: #e7f2eb; }
+    button:disabled { opacity: 0.55; }
+    .status {
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 12px;
+      background: #18211d;
+      border: 1px solid #2a3a33;
+    }
+    .status strong { display: block; margin-bottom: 4px; }
+    .coords { font-family: ui-monospace, Menlo, monospace; color: #e7f2eb; }
+    a { color: #7dcea0; }
+    .warn { color: #e0b15a; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="mark">MyOS specimen logistics</p>
+    <h1>Share this phone</h1>
+      <p>Enter the administrator authorization and choose this phone’s asset code. The server issues a temporary credential limited to that device.</p>
+    <form id="share-form">
+      <label for="authorization">Administrator authorization</label>
+      <input id="authorization" type="password" autocomplete="current-password" spellcheck="false" />
+      <label for="asset">Device</label>
+      <input id="asset" value="phone-demo" autocomplete="off" spellcheck="false" />
+      <button id="toggle" type="button">Start sharing</button>
+    </form>
+    <div class="status">
+      <strong id="state">Not sharing</strong>
+      <div id="detail">Tap start and allow location.</div>
+    </div>
+    <p><a href="./">Open the map</a></p>
+  </main>
+  <script>
+    const toggle = document.getElementById("toggle");
+    const authorizationInput = document.getElementById("authorization");
+    const assetInput = document.getElementById("asset");
+    const stateEl = document.getElementById("state");
+    const detailEl = document.getElementById("detail");
+    let watchId = null;
+    let lastSent = 0;
+    let sessionToken = null;
+
+    function setStatus(title, detail, warn) {
+      stateEl.textContent = title;
+      detailEl.textContent = detail;
+      detailEl.className = warn ? "warn" : "";
+    }
+
+    async function publish(position) {
+      const now = Date.now();
+      if (now - lastSent < 8000) return;
+      lastSent = now;
+      const coords = position.coords;
+      const assetId = assetInput.value.trim();
+      const response = await fetch("api/fix", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + sessionToken
+        },
+        body: JSON.stringify({
+          asset_id: assetId,
+          lat: coords.latitude,
+          lon: coords.longitude,
+          accuracy: coords.accuracy,
+          altitude: coords.altitude,
+          speed: coords.speed,
+          heading: coords.heading,
+          recorded_at: new Date(position.timestamp).toISOString()
+        })
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "The monitor rejected the fix");
+      }
+      setStatus(
+        "Sharing",
+        assetId + " · " + coords.latitude.toFixed(5) + ", " + coords.longitude.toFixed(5)
+      );
+    }
+
+    async function start() {
+      if (!window.isSecureContext) {
+        setStatus(
+          "Needs a secure link",
+          "On an iPhone, open this page with the https address. A local http address cannot read GPS.",
+          true
+        );
+        return;
+      }
+      const uploadAuthorization = authorizationInput.value;
+      if (!uploadAuthorization) {
+        setStatus("Authorization required", "Enter the administrator authorization.", true);
+        return;
+      }
+      if (!assetInput.value.trim()) {
+        setStatus("Device required", "Enter the asset code assigned to this phone.", true);
+        return;
+      }
+      toggle.disabled = true;
+      try {
+        const response = await fetch("api/share/session", {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + uploadAuthorization,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ asset_id: assetInput.value.trim() })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || "The monitor rejected the authorization");
+        sessionToken = payload.token;
+        authorizationInput.value = "";
+        assetInput.disabled = true;
+      } catch (error) {
+        toggle.disabled = false;
+        setStatus("Authorization failed", error.message, true);
+        return;
+      }
+      toggle.disabled = false;
+      if (!navigator.geolocation) {
+        sessionToken = null;
+        assetInput.disabled = false;
+        setStatus("Location is unavailable", "This browser cannot read GPS.", true);
+        return;
+      }
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          publish(position).catch((error) => setStatus("Not stored", error.message, true));
+        },
+        (error) => setStatus("Location blocked", error.message, true),
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+      );
+      if (navigator.wakeLock) {
+        navigator.wakeLock.request("screen").catch(() => {});
+      }
+      toggle.textContent = "Stop sharing";
+      toggle.classList.add("stop");
+      setStatus("Waiting for a fix", "Allow location when the phone asks.");
+    }
+
+    function stop() {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      sessionToken = null;
+      assetInput.disabled = false;
+      toggle.textContent = "Start sharing";
+      toggle.classList.remove("stop");
+      setStatus("Not sharing", "Sharing is stopped.");
+    }
+
+    toggle.addEventListener("click", () => {
+      if (watchId === null) start();
+      else stop();
+    });
+  </script>
+</body>
+</html>

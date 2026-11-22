@@ -16,8 +16,35 @@ run = "pnpm --filter @workspace/myos-fertility run dev"
 
 [services.production]
 build = ["pnpm", "--filter", "@workspace/myos-fertility", "run", "build"]
-run = "pnpm --filter @workspace/myos-fertility run serve"
+
+[services.production.run]
+args = ["pnpm", "--filter", "@workspace/myos-fertility", "run", "serve"]
+
+[services.production.run.env]
+NITRO_HOST = "0.0.0.0"
 
 [services.env]
 PORT = "18587"
 BASE_PATH = "/"
+
+[[services]]
+name = "cryo-chat"
+paths = ["/chat", "/api/chat"]
+localPort = 18588
+
+[services.development]
+run = "python3 ../../cryo/api/server.py --host 0.0.0.0 --port 18588 --disable-reset-endpoints --gps-monitor-url http://127.0.0.1:18589/gps/api/latest"
+
+[services.production]
+run = "python3 cryo/api/server.py --host 0.0.0.0 --port 18588 --disable-reset-endpoints --gps-monitor-url http://127.0.0.1:18589/gps/api/latest"
+
+[[services]]
+name = "gps-monitor"
+paths = ["/gps"]
+localPort = 18589
+
+[services.development]
+run = "python3 ../../gps-monitor/server.py --host 0.0.0.0 --port 18589 --base-path /gps --disable-reset-endpoints --token-env GPS_UPLOAD_TOKEN"
+
+[services.production]
+run = "python3 gps-monitor/server.py --host 0.0.0.0 --port 18589 --base-path /gps --disable-reset-endpoints --token-env GPS_UPLOAD_TOKEN"

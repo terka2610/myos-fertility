@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <base href="__BASE_PATH__/" />
+  <title>MyOS route monitor</title>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
+    crossorigin="anonymous"
+  />
+  <style>
+    :root {
+      --bg: #fff9f4;
+      --panel: #ffffff;
+      --line: #f0e2e8;
+      --text: #2a0e1a;
+      --muted: #6a5360;
+      --live: #3b8f93;
+      --held: #9a6b08;
+      --wait: #806d78;
+      --phone: #3b8f93;
+      --bag: #b08313;
+      --vehicle: #a13d6b;
+      --asset: #806d78;
+      --pink-soft: #f9e3ee;
+      --shadow: 0 1px 2px rgba(42, 14, 26, .04), 0 8px 24px -12px rgba(137, 17, 81, .18);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-end;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .mark {
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--live);
+      margin: 0 0 4px;
+    }
+    h1 { font-size: 25px; font-weight: 500; margin: 0; letter-spacing: -.02em; }
+    .sub { margin: 4px 0 0; color: var(--muted); font-size: 13px; max-width: 640px; }
+    .status-wrap { text-align: right; font-variant-numeric: tabular-nums; }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--wait);
+      margin-right: 6px;
+    }
+    .status-dot.ok { background: var(--live); }
+    .status-dot.bad { background: #c34246; }
+    .count { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    main {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(300px, 370px) minmax(0, 1fr);
+      background: var(--panel);
+    }
+    aside {
+      min-height: 0;
+      border-right: 1px solid var(--line);
+      overflow: auto;
+      padding: 14px;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--vehicle); color: var(--vehicle); }
+    a { color: var(--vehicle); }
+    .lang-switch {
+      display: flex;
+      overflow: hidden;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .lang-switch button {
+      border: 0;
+      border-radius: 0;
+      color: var(--text);
+      background: transparent;
+    }
+    .lang-switch button.active {
+      background: var(--text);
+      color: #fff9f4;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+      margin-bottom: 10px;
+      box-shadow: var(--shadow);
+    }
+    .card-top, .meta, .telemetry { display: flex; justify-content: space-between; gap: 8px; }
+    .card-top { align-items: baseline; }
+    .label { font-weight: 600; }
+    .pill {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--wait);
+    }
+    .pill.live { color: var(--live); }
+    .pill.held { color: var(--held); }
+    .kind {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .meta, .telemetry, .note {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .coords {
+      font-family: "SF Mono", ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      color: var(--text);
+    }
+    .swatch {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .note.warn { color: var(--held); }
+    .settings {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+      margin: 12px 0;
+      box-shadow: var(--shadow);
+    }
+    .settings summary {
+      cursor: pointer;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .settings-help, .settings-status {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .settings-help { margin: 8px 0; }
+    .settings-status { min-height: 1em; margin: 8px 0 0; }
+    .unlock-row {
+      display: flex;
+      gap: 6px;
+    }
+    input, select {
+      min-width: 0;
+      background: #fff9f4;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 7px;
+      font: inherit;
+      font-size: 12px;
+    }
+    .unlock-row input { flex: 1; }
+    .asset-settings {
+      border-top: 1px solid var(--line);
+      margin-top: 10px;
+      padding-top: 10px;
+    }
+    .asset-setting {
+      border-bottom: 1px solid var(--line);
+      padding: 8px 0 10px;
+    }
+    .asset-setting:last-child { border-bottom: 0; }
+    .asset-code { color: var(--muted); font-size: 11px; margin-bottom: 6px; }
+    .settings-history { margin-top: 10px; font-size: 12px; }
+    .settings-history summary { cursor: pointer; }
+    .history-entry { border-top: 1px solid var(--line); padding: 8px 0; overflow-wrap: anywhere; }
+    .history-entry button { margin-top: 5px; }
+    .setting-fields { display: grid; grid-template-columns: 1fr 100px; gap: 6px; }
+    .setting-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .setting-actions label { display: flex; align-items: center; gap: 5px; }
+    .setting-actions input { accent-color: var(--live); }
+    .new-asset { border: 0; padding: 10px 0; margin: 0; }
+    .new-asset legend { font-size: 13px; font-weight: 600; }
+    .new-asset > label { display: grid; gap: 4px; margin-bottom: 7px; font-size: 12px; }
+    .hidden-card { opacity: 0.65; }
+    .journey-stops {
+      margin: 0 0 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(145deg, #fff, var(--pink-soft));
+      box-shadow: var(--shadow);
+    }
+    .journey-stops-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+    .journey-stops-help { margin: 4px 0 8px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+    .stop-link {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 7px 0;
+      border-top: 1px solid rgba(161, 61, 107, .12);
+      color: var(--text);
+      text-decoration: none;
+    }
+    .stop-link:hover strong { color: var(--vehicle); }
+    .stop-number {
+      display: grid;
+      place-items: center;
+      width: 23px;
+      height: 23px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--vehicle);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .stop-link[data-stop="transport"] .stop-number { background: #b08313; }
+    .stop-link[data-stop="storage"] .stop-number { background: var(--live); }
+    .stop-link strong, .stop-link small { display: block; }
+    .stop-link strong { font-size: 12px; font-weight: 600; }
+    .stop-link small { margin-top: 1px; color: var(--muted); font-size: 10px; }
+    #map { height: 100%; min-height: 0; background: #f4ecef; }
+    .leaflet-container { height: 100%; width: 100%; background: #f4ecef; font: inherit; }
+    .leaflet-tile-pane { filter: saturate(.56) sepia(.08) hue-rotate(285deg) brightness(1.015); }
+    .asset-marker { background: transparent; border: 0; }
+    .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 4px rgba(42, 14, 26, 0.16), 0 2px 8px rgba(42, 14, 26, .2);
+    }
+    @media (max-width: 800px) {
+      body { height: auto; overflow: auto; }
+      main { grid-template-columns: 1fr; grid-template-rows: 48vh auto; }
+      #map { order: -1; height: 48vh; min-height: 280px; }
+      aside { border-right: 0; border-top: 1px solid var(--line); }
+      header { flex-direction: column; align-items: flex-start; }
+      .status-wrap { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <p class="mark">MyOS specimen logistics</p>
+      <h1>Route monitor</h1>
+      <p class="sub">Synthetic specimen journey · <a href="track">Share this phone’s location</a></p>
+    </div>
+    <div class="status-wrap">
+      <div><span id="status-dot" class="status-dot"></span><span id="status-text">Connecting</span></div>
+      <div class="count" id="count"></div>
+    </div>
+  </header>
+  <main>
+    <aside>
+      <div class="toolbar">
+        <span>Tracked assets</span>
+        <button id="fit" type="button">Fit route</button>
+      </div>
+      <nav class="journey-stops" aria-label="Journey workflow stops">
+        <p class="journey-stops-title">Choose a workflow stop</p>
+        <p class="journey-stops-help">Site markers are placeholders; no clinic or storage coordinates are assigned.</p>
+        <a class="stop-link" data-stop="clinic" href="../clinic/samples?place=centre" data-testid="link-gps-clinic">
+          <span class="stop-number">1</span>
+          <span><strong>Fertility clinic</strong><small>Start with sample documents</small></span>
+        </a>
+        <a class="stop-link" data-stop="transport" href="../clinic/samples?place=transport" data-testid="link-gps-transport">
+          <span class="stop-number">2</span>
+          <span><strong>Cryo transport</strong><small>Handover and GPS journey</small></span>
+        </a>
+        <a class="stop-link" data-stop="storage" href="../clinic/samples?place=storage" data-testid="link-gps-storage">
+          <span class="stop-number">3</span>
+          <span><strong>Cryogenic storage</strong><small>Confirm receipt and placement</small></span>
+        </a>
+      </nav>
+      <div id="cards"></div>
+      <details class="settings">
+        <summary>Asset settings</summary>
+        <p class="settings-help">Register a tracker before its first location arrives, change its display name or type, or hide it from the map. Its location history stays with its asset code.</p>
+        <form id="settings-unlock-form" class="unlock-row">
+          <input id="operator-authorization" type="password" autocomplete="current-password" placeholder="Upload authorization" aria-label="Upload authorization" />
+          <button id="unlock-settings" type="submit">Unlock</button>
+        </form>
+        <p id="settings-status" class="settings-status" role="status"></p>
+        <form id="create-asset-form" hidden>
+          <fieldset class="new-asset">
+            <legend>Add tracker</legend>
+            <label>Asset code
+              <input name="asset_id" required maxlength="64" pattern="[A-Za-z0-9._\-]+" placeholder="vehicle-cryo-02" aria-describedby="asset-code-help" />
+            </label>
+            <p id="asset-code-help" class="settings-help">Use a unique code with letters, numbers, dots, underscores or hyphens. Use this same code for location uploads.</p>
+            <label>Display name
+              <input name="label" required maxlength="80" placeholder="Courier vehicle" />
+            </label>
+            <label>Asset type
+              <select name="kind">
+                <option value="phone">Phone</option>
+                <option value="bag">Bag</option>
+                <option value="vehicle">Vehicle</option>
+                <option value="asset">Other</option>
+              </select>
+            </label>
+            <button type="submit">Add tracker</button>
+          </fieldset>
+        </form>
+        <div id="asset-settings" class="asset-settings"></div>
+      </details>
+    </aside>
+    <div id="map"></div>
+  </main>
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"
+    crossorigin="anonymous"
+  ></script>
+  <script>
+    const colors = { phone: "#3b8f93", bag: "#b08313", vehicle: "#a13d6b", asset: "#806d78" };
+    const sourceNames = { browser: "Phone browser", owntracks: "OwnTracks", osmand: "Traccar OsmAnd", "traccar-client": "Traccar Client" };
+    const cards = document.getElementById("cards");
+    const statusDot = document.getElementById("status-dot");
+    const statusText = document.getElementById("status-text");
+    const count = document.getElementById("count");
+    const mapEl = document.getElementById("map");
+    const settingsEl = document.getElementById("asset-settings");
+    const settingsStatus = document.getElementById("settings-status");
+    const authorizationInput = document.getElementById("operator-authorization");
+    const createAssetForm = document.getElementById("create-asset-form");
+    let map = null;
+    let layer = null;
+    let fitted = false;
+    let operatorSession = "";
+
+    const tileSets = {
+      en: {
+        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+        attribution: "Tiles &copy; Esri"
+      },
+      local: {
+        url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attribution: "&copy; OpenStreetMap"
+      }
+    };
+    let baseLayer = null;
+
+    function setMapLanguage(lang) {
+      if (!map || !tileSets[lang]) return;
+      const spec = tileSets[lang];
+      if (baseLayer) map.removeLayer(baseLayer);
+      baseLayer = L.tileLayer(spec.url, { maxZoom: 19, attribution: spec.attribution }).addTo(map);
+      baseLayer.bringToBack();
+      try { localStorage.setItem("myos-map-lang", lang); } catch (error) { /* private mode */ }
+      document.querySelectorAll(".lang-switch button").forEach((button) => {
+        button.classList.toggle("active", button.dataset.lang === lang);
+      });
+    }
+
+    if (window.L) {
+      map = L.map(mapEl, { zoomControl: true }).setView([25.19, 55.26], 11);
+      const LangControl = L.Control.extend({
+        options: { position: "topright" },
+        onAdd: function () {
+          const wrap = L.DomUtil.create("div", "lang-switch");
+          wrap.innerHTML = '<button type="button" data-lang="en">English</button><button type="button" data-lang="local">العربية</button>';
+          L.DomEvent.disableClickPropagation(wrap);
+          wrap.addEventListener("click", (event) => {
+            const button = event.target.closest("button");
+            if (button) setMapLanguage(button.dataset.lang);
+          });
+          return wrap;
+        }
+      });
+      map.addControl(new LangControl());
+      let savedLang = "en";
+      try { savedLang = localStorage.getItem("myos-map-lang") || "en"; } catch (error) { savedLang = "en"; }
+      setMapLanguage(savedLang === "local" ? "local" : "en");
+      layer = L.layerGroup().addTo(map);
+    } else {
+      mapEl.textContent = "Map library did not load. Fixes are still stored in the local database.";
+    }
+
+    function ageLabel(iso) {
+      if (!iso) return "No fix yet";
+      const then = Date.parse(iso.endsWith("Z") ? iso : iso + "Z");
+      const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+      if (seconds < 15) return "just now";
+      if (seconds < 60) return seconds + "s ago";
+      const minutes = Math.round(seconds / 60);
+      if (minutes < 60) return minutes + "m ago";
+      const hours = Math.round(minutes / 60);
+      return hours + "h ago";
+    }
+
+    function freshness(iso) {
+      if (!iso) return "wait";
+      const then = Date.parse(iso.endsWith("Z") ? iso : iso + "Z");
+      return (Date.now() - then) < 5 * 60 * 1000 ? "live" : "held";
+    }
+
+    function kilometers(trail) {
+      if (!trail || trail.length < 2) return 0;
+      let total = 0;
+      for (let i = 1; i < trail.length; i += 1) total += haversine(trail[i - 1], trail[i]);
+      return total;
+    }
+
+    function haversine(a, b) {
+      const R = 6371;
+      const dLat = (b[0] - a[0]) * Math.PI / 180;
+      const dLon = (b[1] - a[1]) * Math.PI / 180;
+      const lat1 = a[0] * Math.PI / 180;
+      const lat2 = b[0] * Math.PI / 180;
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+    }
+
+    function addText(parent, tag, text, className) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      node.textContent = text;
+      parent.appendChild(node);
+      return node;
+    }
+
+    function renderCards(assets) {
+      cards.replaceChildren();
+      assets.filter((asset) => asset.enabled).forEach((asset) => {
+        const last = asset.last;
+        const state = freshness(last && last.recorded_at);
+        const card = document.createElement("article");
+        card.className = "card";
+        const top = document.createElement("div");
+        top.className = "card-top";
+        const title = document.createElement("div");
+        const swatch = document.createElement("span");
+        swatch.className = "swatch";
+        swatch.style.background = colors[asset.kind] || colors.asset;
+        title.appendChild(swatch);
+        title.appendChild(document.createTextNode(asset.label));
+        top.appendChild(title);
+        const pillText = state === "live" ? "Live" : state === "held" ? "Held" : "Waiting";
+        addText(top, "span", pillText, "pill " + state);
+        card.appendChild(top);
+        addText(card, "div", asset.kind + " · " + asset.asset_id, "kind");
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        addText(meta, "span", last ? last.lat.toFixed(5) + ", " + last.lon.toFixed(5) : "—", "coords");
+        addText(meta, "span", ageLabel(last && last.recorded_at));
+        card.appendChild(meta);
+        const speed = last && last.speed_kmh != null ? Math.round(last.speed_kmh) + " km/h" : "— km/h";
+        const battery = last && last.battery_pct != null ? Math.round(last.battery_pct) + "%" : "—%";
+        const distance = kilometers(asset.trail);
+        const distanceText = distance > 0 ? distance.toFixed(1) + " km trail" : "no trail";
+        const source = last ? (sourceNames[last.source] || last.source) : "no report";
+        addText(card, "div", speed + " · " + battery + " · " + distanceText, "telemetry");
+        addText(card, "div", source, "note");
+        cards.appendChild(card);
+      });
+    }
+
+    const openHistories = new Set();
+
+    async function loadAssetHistory(assetId, container) {
+      const session = operatorSession;
+      container.textContent = "Loading saved settings…";
+      try {
+        const response = await fetch("api/assets/" + encodeURIComponent(assetId) + "/history", {
+          headers: { "Authorization": "Bearer " + session },
+          cache: "no-store"
+        });
+        const result = await response.json();
+        if (session !== operatorSession) return;
+        if (!response.ok) {
+          if (response.status === 401) lockSettings();
+          throw new Error(result.error || "Could not load setting history");
+        }
+        container.replaceChildren();
+        addText(container, "p", "Latest 50 saved states. Restore replaces name, type and map visibility together; location history is unchanged.", "settings-help");
+        const latest = result.history[0];
+        result.history.forEach((revision, index) => {
+          const entry = document.createElement("div");
+          entry.className = "history-entry";
+          const action = { initial: "First saved state", edit: "Settings edited", restore: "Settings restored" }[revision.action];
+          addText(entry, "div", new Date(revision.changed_at).toLocaleString() + " · " + action + (index === 0 ? " · Current" : ""));
+          addText(entry, "div", revision.label + " · " + revision.kind + " · " + (revision.enabled ? "Shown on map" : "Hidden from map"));
+          if (index > 0) {
+            const restore = document.createElement("button");
+            restore.type = "button";
+            restore.textContent = "Restore this state";
+            restore.addEventListener("click", async () => {
+              if (!window.confirm("Restore " + assetId + " to “" + revision.label + "”, " + revision.kind + ", " + (revision.enabled ? "shown" : "hidden") + " on the map? Location history will not change.")) return;
+              restore.disabled = true;
+              try {
+                const response = await fetch("api/assets/" + encodeURIComponent(assetId) + "/restore", {
+                  method: "POST",
+                  headers: { "Authorization": "Bearer " + operatorSession, "Content-Type": "application/json" },
+                  body: JSON.stringify({ revision_id: revision.id, expected_revision_id: latest.id })
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                  if (response.status === 401) lockSettings();
+                  if (response.status === 409) await loadAssetHistory(assetId, container);
+                  throw new Error(result.error || "Could not restore settings");
+                }
+                settingsStatus.textContent = "Asset settings restored. Location history unchanged.";
+                await refresh();
+              } catch (error) {
+                settingsStatus.textContent = error.message;
+              } finally {
+                restore.disabled = !operatorSession;
+              }
+            });
+            entry.appendChild(restore);
+          }
+          container.appendChild(entry);
+        });
+      } catch (error) {
+        container.textContent = error.message;
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.textContent = "Retry";
+        retry.addEventListener("click", () => loadAssetHistory(assetId, container));
+        container.appendChild(retry);
+      }
+    }
+
+    function renderAssetSettings(assets) {
+      createAssetForm.hidden = !operatorSession;
+      const editing = settingsEl.contains(document.activeElement)
+        && document.activeElement.matches("input, select");
+      if (editing) return;
+      settingsEl.replaceChildren();
+      assets.forEach((asset) => {
+        const row = document.createElement("div");
+        row.className = "asset-setting" + (asset.enabled ? "" : " hidden-card");
+        addText(row, "div", asset.asset_id, "asset-code");
+        const fields = document.createElement("div");
+        fields.className = "setting-fields";
+        const label = document.createElement("input");
+        label.type = "text";
+        label.maxLength = 80;
+        label.value = asset.label;
+        label.setAttribute("aria-label", "Display name for " + asset.asset_id);
+        const kind = document.createElement("select");
+        kind.setAttribute("aria-label", "Asset type for " + asset.asset_id);
+        [["phone", "Phone"], ["bag", "Bag"], ["vehicle", "Vehicle"], ["asset", "Other"]]
+          .forEach(([value, title]) => {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = title;
+            kind.appendChild(option);
+          });
+        kind.value = asset.kind;
+        fields.append(label, kind);
+        row.appendChild(fields);
+        const actions = document.createElement("div");
+        actions.className = "setting-actions";
+        const enabledLabel = document.createElement("label");
+        const enabled = document.createElement("input");
+        enabled.type = "checkbox";
+        enabled.checked = asset.enabled;
+        enabledLabel.append(enabled, document.createTextNode("Show on map"));
+        const save = document.createElement("button");
+        save.type = "button";
+        save.textContent = "Save";
+        save.disabled = !operatorSession;
+        save.addEventListener("click", () => saveAsset(asset.asset_id, label, kind, enabled, save));
+        actions.append(enabledLabel, save);
+        row.appendChild(actions);
+        const history = document.createElement("details");
+        history.className = "settings-history";
+        const summary = document.createElement("summary");
+        summary.textContent = "Setting history";
+        const entries = document.createElement("div");
+        history.append(summary, entries);
+        history.open = openHistories.has(asset.asset_id);
+        history.addEventListener("toggle", () => {
+          if (!history.isConnected) return;
+          if (history.open) {
+            openHistories.add(asset.asset_id);
+            loadAssetHistory(asset.asset_id, entries);
+          } else {
+            openHistories.delete(asset.asset_id);
+          }
+        });
+        row.appendChild(history);
+        settingsEl.appendChild(row);
+      });
+      if (!operatorSession) {
+        settingsEl.replaceChildren();
+        addText(settingsEl, "p", "Unlock with the administrator authorization to edit asset settings.", "settings-help");
+      }
+    }
+
+    function lockSettings() {
+      operatorSession = "";
+      authorizationInput.disabled = false;
+      authorizationInput.value = "";
+      const unlockButton = document.getElementById("unlock-settings");
+      unlockButton.textContent = "Unlock";
+      unlockButton.disabled = false;
+      renderAssetSettings(window.currentAssets || []);
+    }
+
+    async function saveAsset(assetId, labelInput, kindInput, enabledInput, button) {
+      if (!operatorSession) return;
+      button.disabled = true;
+      settingsStatus.textContent = "Saving…";
+      try {
+        const response = await fetch("api/assets/" + encodeURIComponent(assetId), {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + operatorSession,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            label: labelInput.value,
+            kind: kindInput.value,
+            enabled: enabledInput.checked
+          })
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          if (response.status === 401) lockSettings();
+          throw new Error(result.error || "Could not save asset settings");
+        }
+        settingsStatus.textContent = "Asset settings saved.";
+        await refresh();
+      } catch (error) {
+        settingsStatus.textContent = error.message;
+      } finally {
+        button.disabled = !operatorSession;
+      }
+    }
+
+    createAssetForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!operatorSession) return;
+      const fields = createAssetForm.elements;
+      const button = createAssetForm.querySelector("button");
+      button.disabled = true;
+      settingsStatus.textContent = "Adding tracker…";
+      try {
+        const response = await fetch("api/assets", {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + operatorSession,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            asset_id: fields.asset_id.value.trim(),
+            label: fields.label.value,
+            kind: fields.kind.value
+          })
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) lockSettings();
+          throw new Error(result.error || "Could not add tracker");
+        }
+        createAssetForm.reset();
+        settingsStatus.textContent = "Tracker added. Ready for location uploads using code " + result.asset.asset_id + ".";
+        await refresh();
+      } catch (error) {
+        settingsStatus.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById("settings-unlock-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (operatorSession) {
+        lockSettings();
+        settingsStatus.textContent = "Settings locked.";
+        return;
+      }
+      const authorization = authorizationInput.value;
+      if (!authorization) {
+        settingsStatus.textContent = "Enter the administrator authorization.";
+        return;
+      }
+      settingsStatus.textContent = "Checking authorization…";
+      try {
+        const response = await fetch("api/operator/session", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + authorization }
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Authorization failed");
+        operatorSession = result.token;
+        authorizationInput.value = "";
+        authorizationInput.disabled = true;
+        document.getElementById("unlock-settings").textContent = "Lock";
+        settingsStatus.textContent = "Settings unlocked for one hour.";
+        await refresh();
+      } catch (error) {
+        operatorSession = "";
+        settingsStatus.textContent = error.message;
+      }
+    });
+
+    function renderMap(assets) {
+      if (!map || !layer) return;
+      layer.clearLayers();
+      const bounds = [];
+      assets.forEach((asset) => {
+        if (!asset.trail || !asset.trail.length || !asset.last) return;
+        const color = colors[asset.kind] || colors.asset;
+        const line = asset.trail.map((point) => [point[0], point[1]]);
+        L.polyline(line, { color: color, weight: 4, opacity: 0.9 }).addTo(layer);
+        line.forEach((point) => bounds.push(point));
+        const icon = L.divIcon({
+          className: "asset-marker",
+          html: '<div class="dot" style="background:' + color + '"></div>',
+          iconSize: [14, 14],
+          iconAnchor: [7, 7]
+        });
+        L.marker([asset.last.lat, asset.last.lon], { icon: icon, title: asset.label }).addTo(layer);
+      });
+      map.invalidateSize();
+      const size = map.getSize();
+      if (!fitted && bounds.length && size.x > 100 && size.y > 100) {
+        map.fitBounds(bounds, { padding: [40, 40] });
+        fitted = true;
+      }
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch("api/latest", { cache: "no-store" });
+        if (!response.ok) throw new Error("bad status");
+        const data = await response.json();
+        window.currentAssets = data.assets;
+        statusDot.className = "status-dot ok";
+        statusText.textContent = "Receiving";
+        count.textContent = data.position_count + " fixes stored locally";
+        renderCards(data.assets);
+        renderMap(data.assets.filter((asset) => asset.enabled));
+        renderAssetSettings(data.assets);
+      } catch (error) {
+        statusDot.className = "status-dot bad";
+        statusText.textContent = "Monitor offline";
+      }
+    }
+
+    document.getElementById("fit").addEventListener("click", () => {
+      fitted = false;
+      refresh();
+    });
+    refresh();
+    setInterval(refresh, 2000);
+  </script>
+</body>
+</html>

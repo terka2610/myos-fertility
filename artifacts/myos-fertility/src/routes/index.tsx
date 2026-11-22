@@ -76,29 +76,107 @@ function Landing() {
             <span className="rounded-full px-3 py-1 text-sm text-muted-foreground">+ more</span>
           </div>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button onClick={() => demo.go("provider")} disabled={!!demo.busy} className="h-auto rounded-full px-6 py-3 text-base shadow-none disabled:opacity-60">{demo.busy === "provider" ? "Opening…" : "Try as a provider"}</Button>
-            <Button variant="outline" onClick={() => demo.go("patient")} disabled={!!demo.busy} className="h-auto rounded-full border-primary px-6 py-3 text-base text-primary shadow-none disabled:opacity-60">{demo.busy === "patient" ? "Opening…" : "Try as a patient"}</Button>
+            <Button asChild className="h-auto rounded-full px-6 py-3 text-base shadow-none">
+              <Link to="/clinic/samples" search={{ place: "centre" }} data-testid="link-start-workflow">
+                Start with the fertility clinic
+                <ArrowRight aria-hidden="true" className="ml-2 size-4" />
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => demo.go("provider")}
+              disabled={!isSupabaseConfigured() || !!demo.busy}
+              className="h-auto rounded-full border-primary px-5 py-3 text-sm text-primary shadow-none disabled:opacity-60"
+              data-testid="button-provider-demo"
+            >
+              {demo.busy === "provider" ? "Opening…" : "Provider demo"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => demo.go("patient")}
+              disabled={!isSupabaseConfigured() || !!demo.busy}
+              className="h-auto rounded-full border-primary px-5 py-3 text-sm text-primary shadow-none disabled:opacity-60"
+              data-testid="button-patient-demo"
+            >
+              {demo.busy === "patient" ? "Opening…" : "Patient demo"}
+            </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">{isSupabaseConfigured() ? "Opens a shared demo account. No sign-up needed." : "Demo access will be available once the existing backend is connected."}</p>
+          <p role="note" className="mt-3 text-xs text-muted-foreground">
+            {isSupabaseConfigured()
+              ? "Provider and patient demos open shared accounts. The clinic-to-storage walkthrough uses synthetic records."
+              : "Provider and patient demos are unavailable until the backend is connected. The clinic-to-storage walkthrough is ready and uses synthetic records."}
+          </p>
         </div>
-        <div className="relative mx-auto w-full max-w-[270px]">
-          {introAvailable ? <video ref={videoRef} src={introVideo.url} poster={introPoster.url} preload="metadata" playsInline aria-label="MYOS fertility guide introduction" className="aspect-[9/16] w-full rounded-2xl object-contain" onPlaying={() => { setPlaying(true); setVideoLoading(false); setVideoError(false); }} onWaiting={() => { if (videoRef.current && !videoRef.current.paused) setVideoLoading(true); }} onPause={() => { setPlaying(false); setVideoLoading(false); }} onEnded={() => { setPlaying(false); setVideoLoading(false); }} onError={() => { setVideoError(true); setPlaying(false); setVideoLoading(false); }} /> : <div className="flex aspect-[9/16] flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-card/80 px-7 text-center"><Play className="h-9 w-9 text-primary" /><p className="text-xl">Meet your fertility guide</p><p className="text-sm text-muted-foreground">The introduction video wasn’t included in this project export. It can be restored from the original site.</p></div>}
-          <span className="absolute left-3 top-3 rounded-full bg-background/90 px-3 py-1 text-xs font-medium">AI-generated demo</span>
-          <Button disabled={!introAvailable} onClick={play} aria-label={!introAvailable ? "Introduction video not connected" : videoLoading || playing ? "Stop introduction" : videoError ? "Try introduction again" : "Hear the introduction"} className="absolute -bottom-5 left-1/2 h-11 w-60 -translate-x-1/2 gap-2 rounded-full px-5 py-3 text-sm font-medium shadow-lg">
-            {videoLoading ? <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" /> : playing ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}{!introAvailable ? "Video not connected" : videoLoading ? "Loading…" : playing ? "Stop" : videoError ? "Try again" : "Hear the introduction"}
-          </Button>
+        <div className="relative mx-auto w-full max-w-[340px]">
+          {introAvailable ? (
+            <video ref={videoRef} src={introVideo.url} poster={introPoster.url} preload="metadata" playsInline aria-label="MYOS fertility guide introduction" className="aspect-[9/16] w-full rounded-2xl object-contain" onPlaying={() => { setPlaying(true); setVideoLoading(false); setVideoError(false); }} onWaiting={() => { if (videoRef.current && !videoRef.current.paused) setVideoLoading(true); }} onPause={() => { setPlaying(false); setVideoLoading(false); }} onEnded={() => { setPlaying(false); setVideoLoading(false); }} onError={() => { setVideoError(true); setPlaying(false); setVideoLoading(false); }} />
+          ) : (
+            <div className="flex aspect-[4/5] flex-col justify-between rounded-[1.75rem] border border-border bg-card p-6 shadow-soft md:p-7">
+              <div>
+                <p className="text-xs font-semibold tracking-[0.14em] text-accent">QUICK START</p>
+                <h2 className="mt-3 font-display text-3xl leading-tight">
+                  Follow one sample from clinic to storage
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Start with the clinic, then review transport and storage handoffs.
+                </p>
+              </div>
+              <ol className="my-5 space-y-3">
+                {[
+                  ["01", "Fertility clinic", "Open the first sample document"],
+                  ["02", "Cryo transport", "Review handover and GPS"],
+                  ["03", "Cryogenic storage", "Confirm receipt and placement"],
+                ].map(([number, title, detail]) => (
+                  <li key={number} className="flex items-center gap-3 rounded-2xl bg-background p-3">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-pink-soft text-xs font-semibold text-accent">
+                      {number}
+                    </span>
+                    <span>
+                      <span className="block text-sm font-medium">{title}</span>
+                      <span className="block text-xs text-muted-foreground">{detail}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <p className="text-xs text-muted-foreground">
+                Demo only · records stay in this browser and are not real patient records.
+              </p>
+            </div>
+          )}
+          {introAvailable && (
+            <span className="absolute left-3 top-3 rounded-full bg-background/90 px-3 py-1 text-xs font-medium">AI-generated demo</span>
+          )}
+          {introAvailable && (
+            <Button onClick={play} aria-label={videoLoading || playing ? "Stop introduction" : videoError ? "Try introduction again" : "Hear the introduction"} className="absolute -bottom-5 left-1/2 h-11 w-60 -translate-x-1/2 gap-2 rounded-full px-5 py-3 text-sm font-medium shadow-lg">
+              {videoLoading ? <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" /> : playing ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}{videoLoading ? "Loading…" : playing ? "Stop" : videoError ? "Try again" : "Hear the introduction"}
+            </Button>
+          )}
           {videoError && <p role="alert" className="mt-8 text-center text-sm text-muted-foreground">The video couldn’t play. Please try again.</p>}
         </div>
       </section>
 
       <section className="relative mx-auto grid max-w-6xl gap-6 px-5 py-10 md:grid-cols-2 md:px-10">
-        <button onClick={() => demo.go("provider")} className="group rounded-[1.75rem] bg-gold p-9 text-left text-foreground">
+        <button
+          type="button"
+          onClick={() => demo.go("provider")}
+          disabled={!isSupabaseConfigured() || !!demo.busy}
+          title={!isSupabaseConfigured() ? "Provider demo sign-in is unavailable until the backend is connected." : undefined}
+          data-testid="card-provider-demo"
+          className="group rounded-[1.75rem] bg-gold p-9 text-left text-foreground transition-opacity hover:shadow-soft disabled:cursor-not-allowed disabled:opacity-70"
+        >
           <p className="text-xs font-semibold tracking-[0.12em]">FOR PROVIDERS</p>
           <h2 className="mt-3 text-4xl">I'm a provider</h2>
           <p className="mt-3 max-w-sm text-foreground/80">Set up your digital twin from home and stay with your patients between visits, around the clock.</p>
           <span className="mt-8 flex h-13 w-13 items-center justify-center rounded-full bg-primary p-4 text-primary-foreground transition-transform group-hover:translate-x-1"><ArrowRight className="h-5 w-5" /></span>
         </button>
-        <button onClick={() => demo.go("patient")} className="group rounded-[1.75rem] bg-pink p-9 text-left text-foreground">
+        <button
+          type="button"
+          onClick={() => demo.go("patient")}
+          disabled={!isSupabaseConfigured() || !!demo.busy}
+          title={!isSupabaseConfigured() ? "Patient demo sign-in is unavailable until the backend is connected." : undefined}
+          data-testid="card-patient-demo"
+          className="group rounded-[1.75rem] bg-pink p-9 text-left text-foreground transition-opacity hover:shadow-soft disabled:cursor-not-allowed disabled:opacity-70"
+        >
           <p className="text-xs font-semibold tracking-[0.12em]">FOR PATIENTS</p>
           <h2 className="mt-3 text-4xl">I'm a patient</h2>
           <p className="mt-3 max-w-sm text-foreground/80">Ask your doctor's digital twin anything, any time, in your language. No appointment needed.</p>
@@ -138,8 +216,8 @@ function Landing() {
           <div className="mt-20 rounded-[2rem] bg-pink px-6 py-16">
             <h2 className="text-5xl">Ready to get <span className="italic">started?</span></h2>
             <div className="mt-8 flex flex-wrap justify-center gap-4">
-              <button onClick={() => demo.go("provider")} className="rounded-full bg-primary px-7 py-3.5 font-medium text-primary-foreground">I'm a provider</button>
-              <button onClick={() => demo.go("patient")} className="rounded-full bg-primary px-7 py-3.5 font-medium text-primary-foreground">I'm a patient</button>
+              <button type="button" onClick={() => demo.go("provider")} disabled={!isSupabaseConfigured() || !!demo.busy} className="rounded-full bg-primary px-7 py-3.5 font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60">I'm a provider</button>
+              <button type="button" onClick={() => demo.go("patient")} disabled={!isSupabaseConfigured() || !!demo.busy} className="rounded-full bg-primary px-7 py-3.5 font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60">I'm a patient</button>
             </div>
           </div>
         </div>
