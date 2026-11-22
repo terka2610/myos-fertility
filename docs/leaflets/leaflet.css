@@ -1,0 +1,66 @@
+/* MYOS patient leaflet styles, matching the website (src/styles.css): cream ground, deep plum ink,
+   berry accent, soft pink panels, Instrument Serif headings with an italic accent, Poppins text. */
+@page { size: A4; margin: 0; }
+:root {
+  --bg: oklch(0.985 0.009 62.6);
+  --ink: oklch(0.213 0.050 355.2);
+  --muted: oklch(0.426 0.036 348.4);
+  --accent: oklch(0.511 0.141 354.6);
+  --soft: oklch(0.937 0.028 345.9);
+  --panel: oklch(0.937 0.016 347.6);
+  --line: oklch(0.926 0.017 349.5);
+  --card: oklch(1 0 0);
+  --display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --body: "Poppins", "Segoe UI", Arial, sans-serif;
+}
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 400 9.6pt/1.55 var(--body); }
+.page {
+  width: 210mm; min-height: 297mm; padding: 16mm 17mm 18mm; position: relative;
+  display: flex; flex-direction: column; gap: 5mm; page-break-after: always; break-after: page;
+}
+.page:last-child { page-break-after: auto; break-after: auto; }
+.top { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--line); padding-bottom: 3mm; }
+.brand { font: 400 15pt/1 var(--display); letter-spacing: 0.02em; }
+.kind { font-size: 7.5pt; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+h1 { font: 400 34pt/1.02 var(--display); margin: 2mm 0 0; letter-spacing: -0.01em; }
+h1 em, h2 em { font-style: italic; color: var(--accent); }
+.subtitle { font-size: 11pt; color: var(--muted); margin: 0; }
+.intro { background: var(--soft); border-radius: 5mm; padding: 5mm 6mm; }
+.intro b { display: block; font: 400 14pt/1.2 var(--display); color: var(--accent); margin-bottom: 1.5mm; }
+.intro p { margin: 0; }
+h2 { font: 400 17pt/1.15 var(--display); margin: 0 0 1.5mm; }
+.step { display: grid; grid-template-columns: 9mm 1fr; gap: 3mm; align-items: start; }
+.num {
+  width: 8mm; height: 8mm; border-radius: 50%; background: var(--accent); color: var(--bg);
+  font: 600 9pt/8mm var(--body); text-align: center; margin-top: 0.8mm;
+}
+.step p, section p { margin: 0; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: 4mm; padding: 4mm 4.5mm; }
+.tile b { display: block; font-weight: 600; color: var(--accent); font-size: 8pt; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 1mm; }
+.faq { display: grid; gap: 2.6mm; }
+.faq dt { font-weight: 600; }
+.faq dd { margin: 0.6mm 0 0; color: var(--muted); }
+.callout { background: var(--panel); border-radius: 5mm; padding: 5mm 6mm; text-align: center; font: 400 15pt/1.25 var(--display); }
+.callout em { font-style: italic; color: var(--accent); }
+.note { font-size: 8pt; color: var(--muted); }
+.foot {
+  position: absolute; left: 17mm; right: 17mm; bottom: 9mm; display: flex; justify-content: space-between;
+  font-size: 7.5pt; color: var(--muted); border-top: 1px solid var(--line); padding-top: 2mm;
+}
+.draft { font-style: italic; font-size: 7.8pt; color: var(--muted); }
+
+/* Second pages carry more content: questions in two columns and tighter spacing so each leaflet fits two A4 pages. */
+.page.dense { gap: 3.6mm; padding-top: 14mm; }
+.page.dense h2 { font-size: 15.5pt; }
+.page.dense .faq { grid-template-columns: 1fr 1fr; column-gap: 6mm; row-gap: 2.4mm; font-size: 8.8pt; }
+.page.dense .tile { padding: 3mm 4mm; font-size: 9pt; }
+.page.dense .callout { padding: 3.5mm 5mm; font-size: 13.5pt; }
+.page.dense .note, .page.dense .draft { font-size: 7.6pt; }
+.page.dense { gap: 2.8mm; padding-top: 12mm; line-height: 1.45; font-size: 9pt; }
+.page.dense .faq { font-size: 8.4pt; row-gap: 2mm; }
+.page.dense .faq dd { margin-top: 0.3mm; }
+.twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+.twocol h2 { min-height: 0; }
+.page > p { margin: 0; }

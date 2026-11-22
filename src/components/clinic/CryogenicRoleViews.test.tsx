@@ -53,3 +53,45 @@ describe("Cryogenic synthetic role views", () => {
     expect(screen.getByRole("region", { name: "Storage role custody" })).toBeInTheDocument();
   });
 });
+
+describe("Patient view", () => {
+  it("is offered in the Viewing as menu", async () => {
+    const { SYNTHETIC_ROLES } = await import("@/lib/demo/synthetic-role");
+    expect(SYNTHETIC_ROLES).toContain("Patient");
+  });
+
+  it("shows the patient's treatments and answers how to use stored eggs", async () => {
+    const { PatientJourneyView } = await import("./PatientJourneyView");
+    render(<PatientJourneyView />);
+
+    expect(screen.getByText("Unique ID")).toBeInTheDocument();
+    expect(screen.getByText("PT-0142")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Signed documents" })).toHaveTextContent(
+      "Consent to transfer eggs to the storage facility",
+    );
+    expect(screen.getByRole("link", { name: /Your Eggs, Safely Stored/ })).toHaveAttribute(
+      "href",
+      "/leaflets/your-eggs-safely-stored.pdf",
+    );
+    expect(screen.getByRole("link", { name: /Renewing the Storage of Your Eggs/ })).toHaveAttribute(
+      "href",
+      "/leaflets/renewing-your-storage.pdf",
+    );
+    expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
+    const treatments = screen.getByRole("list", { name: "Treatments" });
+    expect(within(treatments).getByText("Egg freezing · cycle 1")).toBeInTheDocument();
+    expect(within(treatments).getByText("Egg freezing · cycle 2")).toBeInTheDocument();
+
+    fireEvent.click(within(treatments).getByText("Egg freezing · cycle 1"));
+    expect(screen.getByRole("list", { name: "Treatment journey" })).toHaveTextContent(
+      "Frozen and safely stored",
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "I want to use my eggs. What should I do?" }),
+    );
+    expect(
+      screen.getByText(/To use your stored eggs, contact your Fertility Centre/),
+    ).toBeInTheDocument();
+  });
+});

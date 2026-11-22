@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { PublicFooter, PublicHeader } from "@/components/myos/PublicHeader";
 import { SYNTHETIC_ROLES, useSyntheticRole } from "@/lib/demo/synthetic-role";
+import { PatientJourneyView } from "@/components/clinic/PatientJourneyView";
 
 type WorkflowPage = "sample-registry" | "journey-calendar";
 
@@ -111,8 +112,14 @@ export function CryogenicWorkflowLayout({
             </select>
           </label>
         </div>
-        <CryogenicWorkflowNavigation activePage={activePage} />
-        {children}
+        {role === "Patient" ? (
+          <PatientJourneyView />
+        ) : (
+          <>
+            <CryogenicWorkflowNavigation activePage={activePage} />
+            {children}
+          </>
+        )}
       </main>
       <div className="bg-card">
         <PublicFooter />

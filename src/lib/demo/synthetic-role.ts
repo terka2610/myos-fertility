@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 
-export const SYNTHETIC_ROLES = ["Fertility Centre", "Cryo Transport", "Cryogenic Storage"] as const;
+export const SYNTHETIC_ROLES = [
+  "Fertility Centre",
+  "Cryo Transport",
+  "Cryogenic Storage",
+  "Patient",
+] as const;
 
 export type SyntheticRole = (typeof SYNTHETIC_ROLES)[number];
 
