@@ -3,8 +3,8 @@ name: Integration boundaries
 description: User-approved rules for combining Muhsina features with the current Replit application.
 ---
 
-Preserve both the existing Replit snapshot and GitHub main when integrating Muhsina's work. Port useful additions into main's architecture rather than replacing it.
+Prioritize Muhsina's feature behavior when integrating her branch, while preserving Replit startup/routing, existing Cryo/GPS services, and synthetic-data safety boundaries.
 
-**Why:** The user chose “Combine both snapshots” and supplied a safe-integration plan that prioritizes main's architecture, security, and services.
+**Why:** On 2026-11-22 the user changed the earlier main-first preference: “prioritize muhusina branch for features as opposed to main one pull from there and push to main.”
 
-**How to apply:** Use an integration branch and normal review, never overwrite main. Read journey/GPS information from the existing Python services rather than introducing a second GPS source or silently migrating persistence to Supabase.
+**How to apply:** Integrate and verify on a working branch, then update main normally when the user requests it; never force-push. Prefer Muhsina's newer product features over conflicting older UI, but do not silently migrate persistence or join synthetic patient IDs to real records.

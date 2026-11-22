@@ -24,8 +24,10 @@ features from `muhsina/cryogenic-workflow`. It does not replace `main`.
 - Synthetic courier positions are not joined to patient records.
 - No WhatsApp messages are sent by this integration.
 - No reset endpoints are enabled.
-- AI is optional and is not configured in this workspace. Missing configuration
-  gives an explicit message while local validation and voice matching remain usable.
+- Groq is the preferred chat provider, with its model selected by `GROQ_MODEL`.
+  Missing configuration gives an explicit message while local validation and voice
+  matching remain usable. ElevenLabs powers consented doctor voices when authorized;
+  otherwise browser speech remains available.
 - External voice mapping receives the opted-in transcript. Never use real patient
   information in that feature; consent is not a substitute for anonymization.
 - AI suggestions do not automatically change forms or save records.
@@ -43,3 +45,20 @@ missing-key AI fallback paths. Scene budget/performance checks also passed.
 Muhsina's history is recorded with an `ours` merge after manual porting; that merge
 is provenance, not a replacement of the main application tree. Review the pull
 request and merge normally; do not force-push main.
+
+## Latest feature priority
+
+The user subsequently requested Muhsina-first feature behavior and a normal update
+to main. Her latest patient treatment view, timeline, logistics helper, document
+examples and leaflet downloads are now included on `/patient`. They are synthetic
+and do not read patient data or claim real signatures. The existing clinic-selection
+journey remains available on the same route.
+
+Twin chat, translations, intent classification, appointment-time extraction and
+fertility consultations now prefer Groq. Provider keys remain server-side; voice
+cloning requires recorded consent and ownership. Public AI form review has a
+process-local request budget and bounded timeouts.
+
+The operator service check uses a short synthetic text and does not save audio or
+read patient records. It can be run explicitly with `check:ai-services`; normal
+unit tests never use live provider credits.

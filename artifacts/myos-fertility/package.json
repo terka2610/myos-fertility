@@ -11,6 +11,9 @@
     "test:journey": "node --experimental-strip-types --test src/lib/samples/cryo-journey.test.mjs",
     "test:form-validation": "node --experimental-strip-types --test src/lib/demo/ai-form-validation.test.mjs",
     "test:clinics": "node --experimental-strip-types --test src/lib/clinics/selection.test.mjs",
+    "test:patient-journeys": "node --experimental-strip-types --test src/lib/demo/patient-journeys.test.mjs",
+    "test:ai-services": "node --experimental-strip-types --test src/lib/ai/*.test.mjs",
+    "check:ai-services": "tsx scripts/check-ai-services.ts",
     "test:scene-performance": "node performance/run-scene-performance.mjs",
     "test:scene-budgets": "node --test performance/budgets.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"

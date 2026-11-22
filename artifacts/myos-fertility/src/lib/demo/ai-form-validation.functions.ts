@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { takeDemoReviewBudget } from "@/lib/ai/review-budget.server";
 import {
   getFormDefinition,
   isProtectedField,
@@ -53,6 +54,9 @@ export const validateFormWithAI = createServerFn({ method: "POST" })
     if (!apiKey) {
       return localOnly("AI review is not configured. Local checks are available; continue with manual review.");
     }
+    if (!takeDemoReviewBudget()) {
+      return localOnly("AI review limit reached. Local checks remain available; try again in a minute.");
+    }
 
     const safeFields = Object.fromEntries(
       form.fields
@@ -71,7 +75,7 @@ export const validateFormWithAI = createServerFn({ method: "POST" })
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: process.env["GROQ_MODEL"]?.trim() || "llama-3.3-70b-versatile",
+          model: process.env["GROQ_MODEL"]?.trim() || "openai/gpt-oss-120b",
           temperature: 0,
           response_format: { type: "json_object" },
           messages: [
@@ -149,6 +153,13 @@ export const extractVoiceFieldsWithAI = createServerFn({ method: "POST" })
         message: "AI extraction is not configured. Local voice matching and manual review remain available.",
       };
     }
+    if (!takeDemoReviewBudget()) {
+      return {
+        enabled: false,
+        suggestions: [],
+        message: "AI review limit reached. Local voice matching remains available; try again in a minute.",
+      };
+    }
 
     const safeFields = form.fields
       .filter((field) => !isProtectedField(field.key, form))
@@ -173,7 +184,7 @@ export const extractVoiceFieldsWithAI = createServerFn({ method: "POST" })
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: process.env["GROQ_MODEL"]?.trim() || "llama-3.3-70b-versatile",
+          model: process.env["GROQ_MODEL"]?.trim() || "openai/gpt-oss-120b",
           temperature: 0,
           response_format: { type: "json_object" },
           messages: [

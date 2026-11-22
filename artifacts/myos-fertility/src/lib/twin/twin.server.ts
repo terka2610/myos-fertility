@@ -6,6 +6,7 @@ import { bookingText, greetingText, notCoveredText, type TwinKind } from "./inte
 import { escalationText, LANGUAGES } from "./languages";
 import kb from "@/lib/fertility/kb.json";
 import tessaKb from "./tessa-kb.json";
+import { AI_REQUEST_TIMEOUT_MS, getChatProvider } from "@/lib/ai/provider.server";
 
 export const TESSA_DOCTOR_ID = "d0c70000-0000-4000-8000-000000000004";
 const TESSA_CHUNKS: Chunk[] = tessaKb as Chunk[];
@@ -14,31 +15,33 @@ export const MODEL = "openai/gpt-6.1-terra";
 const DEMO_CHUNKS: Chunk[] = (kb as { section: string; heading: string; content: string }[]).map((k) => ({ doc_name: "MYOS demo clinic protocol", section: `${k.section} — ${k.heading}`, content: k.content }));
 
 export async function translateTo(lang: string, text: string): Promise<string> {
-  const key = process.env["LOVABLE_API_KEY"];
-  if (lang === "English" || !key) return text;
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, reasoning_effort: "low", messages: [
+  const provider = getChatProvider();
+  if (lang === "English" || !provider) return text;
+  const res = await fetch(provider.url, {
+    signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
+    method: "POST", headers: { Authorization: `Bearer ${provider.key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: provider.model, messages: [
       { role: "system", content: `Translate the user's message to ${lang}. Keep the warm tone. Output only the translation.` },
       { role: "user", content: text },
     ] }),
   });
-  if (!res.ok) { console.error(`Translate failed [${res.status}]: ${await res.text()}`); return text; }
+  if (!res.ok) { console.error(`Translate failed [${res.status}]`); return text; }
   const j = (await res.json()) as { choices: { message: { content: string } }[] };
   return j.choices[0]?.message.content?.trim() || text;
 }
 
 export async function toEnglish(text: string): Promise<string> {
-  const key = process.env["LOVABLE_API_KEY"];
-  if (!key) return text;
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, reasoning_effort: "low", messages: [
+  const provider = getChatProvider();
+  if (!provider) return text;
+  const res = await fetch(provider.url, {
+    signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
+    method: "POST", headers: { Authorization: `Bearer ${provider.key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: provider.model, messages: [
       { role: "system", content: "Translate the user's message to English. Output only the translation." },
       { role: "user", content: text },
     ] }),
   });
-  if (!res.ok) { console.error(`Translate failed [${res.status}]: ${await res.text()}`); return text; }
+  if (!res.ok) { console.error(`Translate failed [${res.status}]`); return text; }
   const j = (await res.json()) as { choices: { message: { content: string } }[] };
   return j.choices[0]?.message.content?.trim() || text;
 }
@@ -50,12 +53,13 @@ export type Intent = "booking" | "question" | "greeting" | "off_topic";
 /** Small AI call: classify the patient's message and translate it to English. Falls back to keyword checks. */
 export async function classifyIntent(text: string): Promise<{ intent: Intent; english: string }> {
   const fallback = { intent: (asksIdentity(text) ? "greeting" : outOfScope(text) ? "off_topic" : "question") as Intent, english: text };
-  const key = process.env["LOVABLE_API_KEY"];
-  if (!key) return fallback;
+  const provider = getChatProvider();
+  if (!provider) return fallback;
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: MODEL, reasoning_effort: "low", messages: [
+    const res = await fetch(provider.url, {
+      signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
+      method: "POST", headers: { Authorization: `Bearer ${provider.key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: provider.model, messages: [
         { role: "system", content: `Classify a patient's message to a fertility doctor's AI twin. Messages may have typos or be in any language.
 intent:
 - "booking": wants an appointment, to meet/see the doctor in person, to schedule, or to talk to a real person/human.
@@ -66,7 +70,7 @@ english: the message translated to English (unchanged if already English).` },
         { role: "user", content: text },
       ], response_format: { type: "json_schema", json_schema: { name: "intent", strict: true, schema: { type: "object", additionalProperties: false, required: ["intent", "english"], properties: { intent: { type: "string", enum: ["booking", "question", "greeting", "off_topic"] }, english: { type: "string" } } } } } }),
     });
-    if (!res.ok) { console.error(`Intent failed [${res.status}]: ${await res.text()}`); return fallback; }
+    if (!res.ok) { console.error(`Intent failed [${res.status}]`); return fallback; }
     const j = (await res.json()) as { choices: { message: { content: string } }[] };
     const out = JSON.parse(j.choices[0]?.message.content || "{}") as { intent: Intent; english: string };
     return ["booking", "question", "greeting", "off_topic"].includes(out.intent) ? { intent: out.intent, english: out.english || text } : fallback;
@@ -141,14 +145,13 @@ ${passages}
 
 QUESTION: ${data.question}${query !== data.question ? `\n(English: ${query})` : ""}`;
 
-    // If an OpenAI key is stored as a project secret, use it; otherwise use the built-in AI.
-    const openai = process.env["OPENAI_API_KEY"];
-    const key = openai || process.env["LOVABLE_API_KEY"];
-    if (!key) throw new Error("AI unavailable");
-    const res = await fetch(openai ? "https://api.openai.com/v1/chat/completions" : "https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    const provider = getChatProvider();
+    if (!provider) throw new Error("AI unavailable");
+    const res = await fetch(provider.url, {
+      signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
+      method: "POST", headers: { Authorization: `Bearer ${provider.key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...(openai ? { model: process.env["OPENAI_MODEL"] || "gpt-4o-mini" } : { model: MODEL, reasoning_effort: "low" }),
+        model: provider.model,
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         response_format: { type: "json_schema", json_schema: { name: "twin_answer", strict: true, schema: {
           type: "object", additionalProperties: false, required: ["covered", "needs_care_team", "answer", "used"],
@@ -156,7 +159,7 @@ QUESTION: ${data.question}${query !== data.question ? `\n(English: ${query})` : 
         } } },
       }),
     });
-    if (!res.ok) { const t = await res.text(); console.error(`AI failed [${res.status}]: ${t}`); throw new Error(res.status === 402 ? "AI credits are used up." : res.status === 429 ? "Too many requests, try again shortly." : `AI error ${res.status}`); }
+    if (!res.ok) { console.error(`AI failed [${res.status}]`); throw new Error(res.status === 402 ? "AI credits are used up." : res.status === 429 ? "Too many requests, try again shortly." : `AI error ${res.status}`); }
     const json = (await res.json()) as { choices: { message: { content: string } }[] };
     const out = JSON.parse(json.choices[0]?.message.content || "{}") as { covered: boolean; needs_care_team: boolean; answer: string; used: number[] };
     if (out.needs_care_team) return escalate("Flagged for the care team");
@@ -167,12 +170,13 @@ QUESTION: ${data.question}${query !== data.question ? `\n(English: ${query})` : 
 
 /** Detect which supported language a text is written in (defaults to English). */
 export async function detectLanguage(text: string): Promise<string> {
-  const key = process.env["LOVABLE_API_KEY"];
-  if (!key) return "English";
+  const provider = getChatProvider();
+  if (!provider) return "English";
   const names = LANGUAGES.map((l) => l.name);
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, reasoning_effort: "low", messages: [
+  const res = await fetch(provider.url, {
+    signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
+    method: "POST", headers: { Authorization: `Bearer ${provider.key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: provider.model, messages: [
       { role: "system", content: `Which language is the user's message written in? Answer with exactly one of: ${names.join(", ")}. If none fit, answer English.` },
       { role: "user", content: text },
     ] }),
@@ -185,11 +189,12 @@ export async function detectLanguage(text: string): Promise<string> {
 
 /** Pull proposed days/times out of a patient's text reply (any language). Returns null when none are given. */
 export async function extractTimes(text: string): Promise<string | null> {
-  const key = process.env["LOVABLE_API_KEY"];
-  if (!key) return null;
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, reasoning_effort: "low", messages: [
+  const provider = getChatProvider();
+  if (!provider) return null;
+  const res = await fetch(provider.url, {
+    signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
+    method: "POST", headers: { Authorization: `Bearer ${provider.key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: provider.model, messages: [
       { role: "system", content: "The patient was asked which days and times work for a clinic appointment. If the message proposes any days, dates or times, return them in short English (e.g. 'Tue or Thu after 3pm'). Otherwise return an empty string." },
       { role: "user", content: text },
     ], response_format: { type: "json_schema", json_schema: { name: "times", strict: true, schema: { type: "object", additionalProperties: false, required: ["times"], properties: { times: { type: "string" } } } } } }),

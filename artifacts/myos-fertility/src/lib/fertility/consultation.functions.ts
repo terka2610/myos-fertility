@@ -5,20 +5,21 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { classify, PATIENT_DECISION, CLINIC, GENERAL } from "./safety";
 import { SYSTEM_PROMPT, MODE_STYLE, ROLE_STYLE, OPENING_MESSAGE, suggestedQuestions, type Mode, type CareRole } from "./doctor";
 import { retrieve, toSource, citedOnly, type Source } from "./knowledge";
+import { AI_REQUEST_TIMEOUT_MS, getChatProvider } from "@/lib/ai/provider.server";
 
 const RECENT_TURNS = 12;
 const SUMMARIZE_AFTER = 24;
-const MODEL = "openai/gpt-6.1-terra";
 
 async function complete(messages: { role: string; content: string }[], _temperature = 0.4): Promise<string> {
-  const key = process.env["LOVABLE_API_KEY"];
-  if (!key) throw new Error("AI unavailable");
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const provider = getChatProvider();
+  if (!provider) throw new Error("AI unavailable");
+  const res = await fetch(provider.url, {
+    signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MODEL, messages, reasoning_effort: "low" }),
+    headers: { Authorization: `Bearer ${provider.key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: provider.model, messages }),
   });
-  if (!res.ok) throw new Error(`AI request failed [${res.status}]: ${await res.text()}`);
+  if (!res.ok) throw new Error(`AI request failed [${res.status}]`);
   const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const out = json.choices?.[0]?.message?.content?.trim();
   if (!out) throw new Error("Empty AI reply");

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, type ErrorComponentProps } from "@tanstack/react-router";
-import { ArrowLeft, CalendarDays } from "lucide-react";
+import { ArrowLeft, CalendarDays, UserRound } from "lucide-react";
 import { PublicFooter, PublicHeader } from "@/components/myos/PublicHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,15 @@ function RegistryHeading({ selectedClinicId }: { selectedClinicId?: string }) {
       >
         <CalendarDays aria-hidden="true" className="size-4" />
         Open journey calendar
+      </Link>
+      <Link
+        to="/patient"
+        search={selectedClinicId ? { selectedClinicId } : {}}
+        className="ml-3 mt-5 inline-flex min-h-10 items-center gap-2 rounded-full border border-primary px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-secondary/50"
+        data-testid="link-samples-patient-view"
+      >
+        <UserRound aria-hidden="true" className="size-4" />
+        Patient view
       </Link>
       {selectedClinicId && (
         <p role="note" className="mt-3 text-xs text-muted-foreground">

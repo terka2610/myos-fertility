@@ -7,8 +7,9 @@ export function PublicHeader() {
   return (
     <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 py-6 md:px-10">
       <Brand />
-      <nav className="flex items-center gap-3 text-xs font-medium sm:gap-5 sm:text-sm">
+      <nav className="flex flex-wrap justify-end gap-x-3 gap-y-2 text-xs font-medium sm:gap-x-5 sm:text-sm">
         <Link to="/clinic/samples" search={{ place: "centre" }} className="text-muted-foreground hover:text-foreground">Cryostorage demo</Link>
+        <Link to="/patient" className="text-muted-foreground hover:text-foreground" data-testid="link-header-patient-view">Patient view</Link>
         <Link to="/about" className="hidden text-muted-foreground hover:text-foreground sm:inline">About</Link>
         <Link to="/resources" className="text-muted-foreground hover:text-foreground">Resources</Link>
         {user ? <Link to="/twin" className="hover:text-accent">Open app</Link> : <Link to="/login" className="hover:text-accent">Log in</Link>}

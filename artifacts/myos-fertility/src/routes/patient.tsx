@@ -4,6 +4,7 @@ import { PublicFooter, PublicHeader } from "@/components/myos/PublicHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PatientJourneyView } from "@/components/clinic/PatientJourneyView";
 import { clinicDataSource } from "@/lib/clinics/data";
 import { resolveClinicSelection, validatePatientSearch } from "@/lib/clinics/selection";
 
@@ -13,8 +14,8 @@ export const Route = createFileRoute("/patient")({
   loader: ({ deps }) => resolveClinicSelection(deps.selectedClinicId, clinicDataSource),
   head: () => ({
     meta: [
-      { title: "Selected demo clinic — MYOS" },
-      { name: "description", content: "Review a fictional clinic selection before entering the sample workflow demo." },
+      { title: "Patient view — MYOS" },
+      { name: "description", content: "Synthetic patient view of treatments, documents and storage, plus fictional clinic selection." },
     ],
   }),
   component: Patient,
@@ -83,6 +84,15 @@ function Patient() {
             </Card>
           )}
         </div>
+        <section aria-labelledby="patient-view-heading" className="mt-12">
+          <h1 id="patient-view-heading" className="mb-2 text-4xl md:text-5xl">
+            Patient <span className="serif-accent">view</span>
+          </h1>
+          <p role="note" className="mb-6 text-sm text-muted-foreground" data-testid="text-patient-view-warning">
+            Public synthetic demo. All treatments, documents and statuses are simulated; nothing is read from or saved to a live record.
+          </p>
+          <PatientJourneyView />
+        </section>
       </main>
       <div className="bg-card"><PublicFooter /></div>
     </div>

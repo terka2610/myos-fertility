@@ -64,6 +64,7 @@ function TwinChat() {
 
   const say = async (t: string) => {
     try { const { audio } = await speakAsTwin({ data: { doctorId, text: t } }); if (audio) return await playWithLevel(audio, level); } catch { /* fall back */ }
+    toast.info("Using your browser's voice. A consented ElevenLabs voice is not available.");
     await speakBrowser(t, level, doctor.is_female, bcpFor(language));
   };
 
