@@ -1,3 +1,4 @@
 - [Workflow scope and safety](workflow-scope.md) — use the supplied 3D scene as workflow navigation; keep synthetic demo information separate from real patients.
 - [Production startup checks](production-startup.md) — verify production commands from the repository root and bind the web server to IPv4.
 - [Credential scope separation](credential-scope-separation.md) — encode role scopes distinctly from user-selected asset identifiers to prevent name collisions.
+- [Integration boundaries](integration-boundaries.md) — preserve both snapshots; port Muhsina features into main's architecture without a second GPS source.

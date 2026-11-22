@@ -20,11 +20,22 @@ state.activity = [{
 export const savedState = { version: 2, ...state };
 
 export const test = base.extend<{ backendWriteGuard: void }>({
-  backendWriteGuard: [async ({ context }, use) => {
+  backendWriteGuard: [async ({ context, baseURL }, use) => {
     const blocked: string[] = [];
     await context.route("**/*", async (route) => {
       const request = route.request();
+      const url = new URL(request.url());
+      let readOnlyDemoReview = false;
+      if (request.method() === "POST" && baseURL && url.origin === new URL(baseURL).origin
+        && url.pathname.startsWith("/_serverFn/")) {
+        try {
+          const rpc = JSON.parse(Buffer.from(url.pathname.slice("/_serverFn/".length), "base64url").toString());
+          readOnlyDemoReview = rpc.file === "/src/lib/demo/ai-form-validation.functions.ts?tss-serverfn-split"
+            && ["validateFormWithAI_createServerFn_handler", "extractVoiceFieldsWithAI_createServerFn_handler"].includes(rpc.export);
+        } catch { /* Unknown RPCs remain blocked. */ }
+      }
       if (!["GET", "HEAD", "OPTIONS"].includes(request.method())
+        && !readOnlyDemoReview
         || /\/api\/(?:[^/]+\/)*reset(?:[/-]|$)/i.test(new URL(request.url()).pathname)) {
         blocked.push(`${request.method()} ${new URL(request.url()).pathname}`);
         await route.abort("blockedbyclient");

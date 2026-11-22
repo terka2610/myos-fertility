@@ -83,14 +83,6 @@ test("forms hide all overlays; dismissing restores navigation without changing s
 });
 
 test("AI form and voice checks stay local without synthetic-data consent", async ({ page }) => {
-  page.on("console", (message) => {
-    if (message.type() === "error" || message.type() === "warning") {
-      console.log(`browser ${message.type()}: ${message.text()}`);
-    }
-  });
-  page.on("requestfailed", (request) => {
-    console.log(`request failed: ${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`);
-  });
   const scene = await openJourney(page, "centre");
   await scene.getByRole("button", { name: "Document check", exact: true }).click();
   await scene.getByTestId("button-feature-open-documents").click();
@@ -119,7 +111,7 @@ test("AI form and voice checks stay local without synthetic-data consent", async
   await dialog.getByTestId("checkbox-voice-synthetic-ai").check();
   await dialog.getByTestId("button-ai-voice-review").click();
   await expect(
-    dialog.getByRole("status").filter({ hasText: "AI extraction is not configured" }),
+    dialog.getByRole("alert").filter({ hasText: "AI extraction is not configured" }),
   ).toBeVisible();
 });
 
