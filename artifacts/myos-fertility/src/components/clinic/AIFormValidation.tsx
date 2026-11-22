@@ -52,7 +52,13 @@ export function AIFormValidation({ formId, fields, onApply, validator }: Props) 
       }
       const run = validator ?? ((input) => validateFormWithAI({ data: input }));
       setResult(await run({ formId, fields, syntheticConfirmed: allowAI }));
-    } catch {
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn(
+          "AI form validation action failed",
+          error instanceof Error ? error.message : "unknown error",
+        );
+      }
       setResult({
         enabled: false,
         issues: [],
