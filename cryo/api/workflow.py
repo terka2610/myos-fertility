@@ -1,21 +1,28 @@
 """Simulated MYOS conversations for SMP-0001.
 
-Linq is not called. Each role has its own thread. A reply is a proposal
-until a backend rule accepts it. Message delivered, reply received, and
-task completed stay separate.
+Each role has its own thread. A reply is a proposal until a backend rule
+accepts it. Message delivered, reply received, and task completed stay
+separate. Twilio delivery is optional and lives outside this file.
 """
 
 from __future__ import annotations
 
+import os
 import sqlite3
 
 SAMPLE = "SMP-0001"
 ROLES = ("admin", "centre", "transport", "storage", "patient")
 ACCOUNTS = ("admin", "centre", "transport", "storage", "patient")
 WHATSAPP = {
-    "admin": "+233544511586",
-    "centre": "+421902950910",
-    "storage": "+421911713703",
+    "admin": "+971585022715",
+    "centre": "+971554611264",
+    "storage": "+971569890171",
+}
+# Trial sender each phone joined. Clinic joined a different Twilio number.
+WHATSAPP_FROM = {
+    "+971585022715": "+17372508034",
+    "+971554611264": "+17372212163",
+    "+971569890171": "+17372508034",
 }
 THREADS = {
     "group": ("admin", "centre", "transport", "storage", "patient"),
@@ -127,6 +134,14 @@ def ensure(conn: sqlite3.Connection) -> None:
           state TEXT NOT NULL,
           idempotency_key TEXT UNIQUE
         );
+        CREATE TABLE IF NOT EXISTS msg_deliveries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          message_id INTEGER,
+          phone TEXT NOT NULL,
+          status TEXT NOT NULL,
+          detail TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
         """
     )
     columns = [row[1] for row in conn.execute("PRAGMA table_info(msg_messages)")]
@@ -222,11 +237,18 @@ def snapshot(conn: sqlite3.Connection) -> dict:
         schedule_status = "pickup confirmed"
     elif document["status"] == "approved":
         schedule_status = "asking availability"
+    live = bool(os.environ.get("TWILIO_ACCOUNT_SID") and os.environ.get("TWILIO_AUTH_TOKEN"))
+    deliveries = conn.execute(
+        """
+        SELECT phone, status, detail, created_at FROM msg_deliveries
+        ORDER BY id DESC LIMIT 6
+        """
+    ).fetchall()
     return {
         "sample_id": SAMPLE,
         "run_id": run["id"],
-        "simulated": True,
-        "provider": "simulated-chat",
+        "simulated": not live,
+        "provider": "twilio" if live else "simulated-chat",
         "document": {
             "status": document["status"],
             "owner_role": document["owner_role"],
@@ -254,9 +276,30 @@ def snapshot(conn: sqlite3.Connection) -> dict:
         "open_for": _open_for(conn),
         "accounts": list(ACCOUNTS),
         "whatsapp": dict(WHATSAPP),
+        "deliveries": [dict(row) for row in deliveries],
         "threads": _thread_messages(conn, run["id"]),
         "thread_members": {name: list(members) for name, members in THREADS.items()},
     }
+
+
+def latest_message_id(conn: sqlite3.Connection) -> int:
+    row = conn.execute("SELECT COALESCE(MAX(id), 0) AS n FROM msg_messages").fetchone()
+    return int(row["n"])
+
+
+def outbound_since(conn: sqlite3.Connection, after_id: int) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, role, body, thread FROM msg_messages
+        WHERE id > ? AND direction = 'out'
+        ORDER BY id
+        """,
+        (after_id,),
+    ).fetchall()
+    return [
+        {"id": row["id"], "role": row["role"], "body": row["body"], "thread": row["thread"]}
+        for row in rows
+    ]
 
 
 def _role_for(sender: str) -> str:

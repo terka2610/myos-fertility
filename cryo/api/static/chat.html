@@ -50,6 +50,7 @@
       <p id="schedule"></p>
       <p id="hint" class="muted"></p>
       <p id="phones" class="muted"></p>
+      <p id="delivery" class="muted"></p>
     </div>
     <div class="card">
       <h2>Location</h2>
@@ -104,8 +105,14 @@ function draw() {
   document.getElementById("schedule").textContent = state.schedule.status + " · estimate " + eta;
   document.getElementById("hint").textContent = state.hint;
   const phones = state.whatsapp || {};
-  document.getElementById("phones").textContent = phones.admin
-    ? "WhatsApp · admin " + phones.admin + " · clinic " + phones.centre + " · storage " + phones.storage + " · Cryoport and patient still need a number"
+  const names = { admin: "admin", centre: "clinic", storage: "storage" };
+  const listed = Object.keys(names).filter((key) => phones[key]).map((key) => names[key] + " " + phones[key]);
+  document.getElementById("phones").textContent = listed.length
+    ? "WhatsApp · " + listed.join(" · ") + (state.provider === "twilio" ? " · live" : " · waiting for Twilio secrets")
+    : "";
+  const last = (state.deliveries || [])[0];
+  document.getElementById("delivery").textContent = last
+    ? "Last WhatsApp " + last.status + " to " + last.phone + (last.status === "failed" ? " · " + last.detail : "")
     : "";
   const gps = document.getElementById("gps");
   gps.textContent = state.tracking
@@ -169,6 +176,7 @@ document.getElementById("reset").addEventListener("click", async () => {
 });
 
 load();
+setInterval(load, 4000);
 </script>
 </body>
 </html>

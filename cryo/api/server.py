@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
+import twilio_bridge
 import workflow
 
 API_ROOT = Path(__file__).resolve().parent
@@ -309,34 +311,22 @@ class Handler(BaseHTTPRequestHandler):
                 conn.close()
             return
         if method == "POST" and path == "/api/chat/tick":
-            conn = workflow.connect(self.db_path)
-            try:
-                self.send_json(200, workflow.scheduled_update(conn))
-            finally:
-                conn.close()
+            self.send_json(200, self.run_chat(workflow.scheduled_update))
             return
         if method == "POST" and path == "/api/chat/reset":
-            conn = workflow.connect(self.db_path)
-            try:
-                self.send_json(200, workflow.reset(conn))
-            finally:
-                conn.close()
+            self.send_json(200, self.run_chat(workflow.reset))
             return
         if method == "POST" and path == "/api/chat/action":
             payload = self.read_json()
-            conn = workflow.connect(self.db_path)
-            try:
-                result = workflow.act(conn, str(payload.get("action", "")))
-            finally:
-                conn.close()
+            result = self.run_chat(lambda conn: workflow.act(conn, str(payload.get("action", ""))))
             self.send_json(200 if result.get("ok") else 409, result)
             return
         if method == "POST" and path == "/api/chat/message":
             payload = self.read_json()
             proposal = payload.get("proposal_id")
-            conn = workflow.connect(self.db_path)
-            try:
-                result = workflow.post_message(
+
+            def post(conn: sqlite3.Connection) -> dict:
+                return workflow.post_message(
                     conn,
                     str(payload.get("role", "")),
                     str(payload.get("text", "")),
@@ -344,9 +334,24 @@ class Handler(BaseHTTPRequestHandler):
                     None if proposal is None else int(proposal),
                     payload.get("thread") or None,
                 )
+
+            self.send_json(200, self.run_chat(post))
+            return
+        if method == "POST" and path == "/api/twilio/whatsapp":
+            raw = self.read_raw()
+            fields = {
+                key: values[-1]
+                for key, values in parse_qs(raw.decode("utf-8"), keep_blank_values=True).items()
+            }
+            if not twilio_bridge.signature_ok(self.public_url(), fields, self.headers.get("X-Twilio-Signature", "")):
+                self.send_json(403, {"error": "invalid signature"})
+                return
+            conn = workflow.connect(self.db_path)
+            try:
+                twilio_bridge.accept_inbound(conn, fields)
             finally:
                 conn.close()
-            self.send_json(200, result)
+            self.send_xml(200, '<?xml version="1.0" encoding="UTF-8"?><Response></Response>')
             return
         if method == "GET" and path == "/health":
             self.send_json(200, {"status": "ok"})
@@ -377,11 +382,34 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json(404, {"error": "not found"})
 
-    def read_json(self) -> dict:
+    def run_chat(self, fn):
+        conn = workflow.connect(self.db_path)
+        try:
+            before = workflow.latest_message_id(conn)
+            result = fn(conn)
+            twilio_bridge.deliver(conn, before)
+            return result
+        finally:
+            conn.close()
+
+    def public_url(self) -> str:
+        configured = os.environ.get("TWILIO_WEBHOOK_URL", "").strip()
+        if configured:
+            return configured
+        proto = self.headers.get("X-Forwarded-Proto", "https")
+        host = self.headers.get("X-Forwarded-Host") or self.headers.get("Host") or "localhost"
+        return proto + "://" + host + "/api/twilio/whatsapp"
+
+    def read_raw(self) -> bytes:
         length = int(self.headers.get("Content-Length", "0") or "0")
         if length <= 0:
+            return b""
+        return self.rfile.read(length)
+
+    def read_json(self) -> dict:
+        raw = self.read_raw()
+        if not raw:
             return {}
-        raw = self.rfile.read(length)
         try:
             payload = json.loads(raw.decode("utf-8"))
         except json.JSONDecodeError:
@@ -394,6 +422,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def send_xml(self, status: int, page: str) -> None:
+        body = page.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/xml; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
@@ -422,8 +458,8 @@ def serve(host: str, port: int, db_path: Path) -> ThreadingHTTPServer:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="MyOS sample API")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8790)
+    parser.add_argument("--host", default="0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8790")))
     parser.add_argument("--db", default=str(DEFAULT_DB))
     args = parser.parse_args()
     httpd = serve(args.host, args.port, Path(args.db))
