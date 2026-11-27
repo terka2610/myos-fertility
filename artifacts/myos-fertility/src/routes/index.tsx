@@ -21,6 +21,8 @@ export const Route = createFileRoute("/")({
       { property: "og:description", content: "A fertility doctor's AI digital twin that answers from clinic-approved protocols, day and night, in any language." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:image", content: "https://health.myos.sk/myos-logo-512.png" },
+      { name: "twitter:image", content: "https://health.myos.sk/myos-logo-512.png" },
     ],
   }),
   component: Landing,

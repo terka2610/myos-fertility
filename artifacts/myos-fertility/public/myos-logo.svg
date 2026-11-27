@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>MYOS</title>
+  <defs>
+    <linearGradient id="ring" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1024" y2="1024">
+      <stop offset="0%" stop-color="#7a2bea"/>
+      <stop offset="18.939%" stop-color="#7a2bea"/>
+      <stop offset="28.027%" stop-color="#2964da"/>
+      <stop offset="50%" stop-color="#14d1c0"/>
+      <stop offset="71.973%" stop-color="#668ba8"/>
+      <stop offset="100%" stop-color="#668ba8"/>
+    </linearGradient>
+  </defs>
+  <circle cx="512" cy="512" r="450" fill="none" stroke="url(#ring)" stroke-width="14"/>
+  <polygon points="512,145 512,512 147,512" fill="#025def"/>
+  <polygon points="512,145 877,512 512,512" fill="#08d9c2"/>
+  <polygon points="147,512 512,512 512,877" fill="#771bef"/>
+  <polygon points="877,512 512,512 512,877" fill="#022b75"/>
+  <circle cx="512" cy="512" r="48" fill="#ffffff"/>
+</svg>
